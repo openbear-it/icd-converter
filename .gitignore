@@ -1,0 +1,20 @@
+# Binaries
+icd-converter
+icd-converter-bin
+
+# SQLite database (generato automaticamente al primo avvio)
+*.db
+*.db-shm
+*.db-wal
+
+# SSH keys (mai in repo)
+*.key
+*.pem
+
+# Go build cache
+vendor/
+
+# IDE
+.vscode/
+.idea/
+*.swp

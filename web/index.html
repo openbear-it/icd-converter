@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ICD Converter – Test UI</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f0f4f8;
+      color: #1a202c;
+      min-height: 100vh;
+    }
+    header {
+      background: linear-gradient(135deg, #1a56db 0%, #0e9f6e 100%);
+      color: #fff;
+      padding: 1.5rem 2rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,.15);
+    }
+    header h1 { font-size: 1.6rem; font-weight: 700; }
+    header p  { font-size: .9rem; opacity: .85; margin-top: .25rem; }
+
+    main { max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
+
+    .tabs { display: flex; gap: .5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .tab-btn {
+      padding: .5rem 1.1rem;
+      border: 2px solid #1a56db;
+      border-radius: 6px;
+      background: #fff;
+      color: #1a56db;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .18s, color .18s;
+    }
+    .tab-btn.active, .tab-btn:hover { background: #1a56db; color: #fff; }
+
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 1px 6px rgba(0,0,0,.1);
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .card h2 { font-size: 1.1rem; margin-bottom: 1rem; color: #1a56db; }
+
+    .form-row { display: flex; gap: .75rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: .75rem; }
+    .form-group { display: flex; flex-direction: column; gap: .3rem; flex: 1; min-width: 160px; }
+    label { font-size: .82rem; font-weight: 600; color: #4a5568; }
+    input, select, textarea {
+      padding: .45rem .7rem;
+      border: 1.5px solid #cbd5e0;
+      border-radius: 6px;
+      font-size: .92rem;
+      width: 100%;
+      transition: border-color .18s;
+    }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: #1a56db; }
+    textarea { resize: vertical; min-height: 80px; }
+
+    .btn {
+      padding: .5rem 1.3rem;
+      border: none;
+      border-radius: 6px;
+      background: #1a56db;
+      color: #fff;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: .92rem;
+      transition: background .18s;
+      white-space: nowrap;
+    }
+    .btn:hover { background: #1648c0; }
+    .btn.green { background: #0e9f6e; }
+    .btn.green:hover { background: #0b8759; }
+
+    .examples { margin-top: .5rem; }
+    .examples span { font-size: .78rem; color: #718096; margin-right: .3rem; }
+    .example-chip {
+      display: inline-block;
+      padding: .2rem .6rem;
+      background: #ebf4ff;
+      border: 1px solid #bee3f8;
+      border-radius: 20px;
+      font-size: .78rem;
+      color: #1a56db;
+      cursor: pointer;
+      margin: .15rem .15rem;
+      transition: background .15s;
+    }
+    .example-chip:hover { background: #bee3f8; }
+
+    #output {
+      margin-top: 1rem;
+      background: #1a202c;
+      color: #a3e635;
+      border-radius: 8px;
+      padding: 1rem;
+      font-size: .82rem;
+      font-family: 'Courier New', monospace;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 460px;
+      overflow-y: auto;
+      display: none;
+    }
+    .loading { color: #f6c90e; }
+    .error-msg { color: #fc8181; }
+
+    /* Results cards */
+    .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+    @media(max-width:640px){ .result-grid { grid-template-columns: 1fr; } }
+    .result-section h3 { font-size: .95rem; color: #2d3748; margin-bottom: .5rem; }
+    .icd-card {
+      border: 1.5px solid #e2e8f0;
+      border-radius: 8px;
+      padding: .7rem .9rem;
+      margin-bottom: .5rem;
+      background: #f7fafc;
+    }
+    .icd-card .code { font-weight: 700; color: #1a56db; font-size: .95rem; }
+    .icd-card .desc { font-size: .85rem; color: #4a5568; margin-top: .2rem; }
+    .icd-card .badge {
+      display: inline-block;
+      font-size: .7rem;
+      padding: .1rem .5rem;
+      border-radius: 20px;
+      background: #ebf4ff;
+      color: #1a56db;
+      margin-top: .3rem;
+      margin-right: .3rem;
+    }
+    .icd-card .confidence {
+      font-size: .75rem;
+      color: #718096;
+      float: right;
+    }
+    .icd-card .rationale { font-size: .78rem; color: #718096; margin-top: .25rem; font-style: italic; }
+
+    .raw-toggle {
+      font-size: .78rem;
+      color: #718096;
+      cursor: pointer;
+      text-decoration: underline;
+      margin-top: .5rem;
+      display: inline-block;
+    }
+
+    /* ── API panel two-pane layout ──────────────────────────── */
+    .api-layout {
+      display: grid;
+      grid-template-columns: 3fr 2fr;
+      gap: 1.25rem;
+      align-items: start;
+    }
+    @media(max-width:820px) { .api-layout { grid-template-columns: 1fr; } }
+
+    .api-response-card {
+      position: sticky;
+      top: 1rem;
+      padding: 0;
+      overflow: hidden;
+      min-height: 200px;
+    }
+    #api-response-pane { min-height: 200px; }
+
+    .api-placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 200px;
+      color: #a0aec0;
+      font-size: .85rem;
+      text-align: center;
+      gap: .6rem;
+      padding: 1.5rem;
+    }
+
+    .api-resp-header {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: .5rem;
+      padding: .65rem .9rem;
+      border-bottom: 1px solid #e2e8f0;
+      background: #f7fafc;
+    }
+    .api-resp-body {
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: .75rem 1rem;
+      font-size: .78rem;
+      overflow: auto;
+      max-height: calc(100vh - 200px);
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin: 0;
+    }
+
+    .api-section-title {
+      font-size: .72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #718096;
+      margin: 1.1rem 0 .45rem;
+      padding-bottom: .3rem;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .api-section-title:first-of-type { margin-top: .25rem; }
+
+    .api-ep-card {
+      border: 1.5px solid #e2e8f0;
+      border-radius: 8px;
+      margin-bottom: .6rem;
+      background: #f7fafc;
+      overflow: hidden;
+      transition: border-color .18s, box-shadow .18s;
+    }
+    .api-ep-card.api-ep-active {
+      border-color: #1a56db;
+      box-shadow: 0 0 0 3px rgba(26,86,219,.1);
+    }
+    .api-ep-header {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      padding: .55rem .8rem;
+      flex-wrap: wrap;
+    }
+    .api-ep-body {
+      border-top: 1px solid #e2e8f0;
+      padding: .55rem .8rem .65rem;
+      background: #fff;
+    }
+
+    .api-method {
+      display: inline-block;
+      font-size: .7rem;
+      font-weight: 800;
+      padding: .18rem .5rem;
+      border-radius: 4px;
+      white-space: nowrap;
+      font-family: monospace;
+      letter-spacing: .05em;
+    }
+    .api-method.get  { background: #d1fae5; color: #065f46; }
+    .api-method.post { background: #dbeafe; color: #1e40af; }
+
+    .api-ep-path {
+      font-size: .83rem;
+      color: #1a202c;
+      flex: 1;
+      word-break: break-all;
+    }
+    .api-try-btn {
+      padding: .2rem .65rem;
+      border: 1.5px solid #1a56db;
+      border-radius: 5px;
+      background: #fff;
+      color: #1a56db;
+      font-size: .76rem;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background .15s, color .15s;
+      margin-left: auto;
+    }
+    .api-try-btn:hover, .api-ep-card.api-ep-active .api-try-btn {
+      background: #1a56db;
+      color: #fff;
+    }
+
+    .api-param-row {
+      display: flex;
+      gap: .4rem;
+      align-items: baseline;
+      font-size: .8rem;
+      color: #4a5568;
+      margin-bottom: .15rem;
+    }
+    .api-param-name { color: #1a56db; font-family: monospace; font-size: .78rem; font-weight: 600; }
+    .api-param-badge {
+      font-size: .65rem;
+      background: #f0f4f8;
+      color: #718096;
+      border: 1px solid #cbd5e0;
+      border-radius: 3px;
+      padding: 0 .35rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .api-resp-schema {
+      font-size: .78rem;
+      color: #4a5568;
+      margin-top: .45rem;
+    }
+    .api-resp-schema code { color: #1a56db; font-size: .76rem; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>ICD Converter</h1>
+  <p>Conversione ICD-9 ↔ ICD-10 · Ricerca testuale · Ricerca similiarità</p>
+</header>
+
+<main>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('convert')">Converti Codice</button>
+    <button class="tab-btn" onclick="switchTab('search')">Ricerca Testuale</button>
+    <button class="tab-btn" onclick="switchTab('infer')">Ricerca Similiarità</button>
+    <button class="tab-btn" onclick="switchTab('list')">Esplora Codici</button>
+    <button class="tab-btn" onclick="switchTab('info')">ℹ Info &amp; Fonti</button>
+    <button class="tab-btn" onclick="switchTab('api')">&#x1F4CB; API</button>
+  </div>
+
+  <!-- PANEL: CONVERT -->
+  <div class="panel active" id="panel-convert">
+    <div class="card">
+      <h2>Conversione Codice ICD</h2>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Tipo di codice sorgente</label>
+          <select id="conv-dir">
+            <option value="icd9-to-icd10">ICD-9 → ICD-10</option>
+            <option value="icd10-to-icd9">ICD-10 → ICD-9</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Codice</label>
+          <input type="text" id="conv-code" placeholder="es. 410.91" />
+        </div>
+        <button class="btn" onclick="doConvert()">Converti</button>
+      </div>
+      <div class="examples">
+        <span>Esempi ICD-9:</span>
+        <span class="example-chip" onclick="setConv('icd9-to-icd10','410.91')">410.91 (IMA)</span>
+        <span class="example-chip" onclick="setConv('icd9-to-icd10','427.31')">427.31 (FA)</span>
+        <span class="example-chip" onclick="setConv('icd9-to-icd10','250.00')">250.00 (Diabete)</span>
+        <span class="example-chip" onclick="setConv('icd9-to-icd10','486')">486 (Polmonite)</span>
+        <span class="example-chip" onclick="setConv('icd9-to-icd10','81.54')">81.54 (PTG)</span>
+      </div>
+      <div class="examples" style="margin-top:.4rem">
+        <span>Esempi ICD-10:</span>
+        <span class="example-chip" onclick="setConv('icd10-to-icd9','I21.9')">I21.9 (IMA)</span>
+        <span class="example-chip" onclick="setConv('icd10-to-icd9','I48.91')">I48.91 (FA)</span>
+        <span class="example-chip" onclick="setConv('icd10-to-icd9','E11.9')">E11.9 (Diabete T2)</span>
+        <span class="example-chip" onclick="setConv('icd10-to-icd9','J18.9')">J18.9 (Polmonite)</span>
+        <span class="example-chip" onclick="setConv('icd10-to-icd9','G20')">G20 (Parkinson)</span>
+      </div>
+    </div>
+    <div id="result-convert"></div>
+  </div>
+
+  <!-- PANEL: SEARCH -->
+  <div class="panel" id="panel-search">
+    <div class="card">
+      <h2>Ricerca Testuale nei Codici ICD</h2>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Testo libero</label>
+          <input type="text" id="search-q" placeholder="es. infarto miocardio, diabetes, pneumonia…" />
+        </div>
+        <div class="form-group" style="max-width:130px">
+          <label>Versione</label>
+          <select id="search-ver">
+            <option value="both">Entrambe</option>
+            <option value="icd9">Solo ICD-9</option>
+            <option value="icd10">Solo ICD-10</option>
+          </select>
+        </div>
+        <button class="btn" onclick="doSearch()">Cerca</button>
+      </div>
+      <div class="examples">
+        <span>Esempi:</span>
+        <span class="example-chip" onclick="setSearch('infarto miocardio')">infarto miocardio</span>
+        <span class="example-chip" onclick="setSearch('diabete mellito')">diabete mellito</span>
+        <span class="example-chip" onclick="setSearch('polmonite')">polmonite</span>
+        <span class="example-chip" onclick="setSearch('frattura femore')">frattura femore</span>
+        <span class="example-chip" onclick="setSearch('ipertensione')">ipertensione</span>
+        <span class="example-chip" onclick="setSearch('fibrillazione atriale')">fibrillazione atriale</span>
+        <span class="example-chip" onclick="setSearch('insufficienza renale')">insufficienza renale</span>
+      </div>
+    </div>
+    <div id="result-search"></div>
+  </div>
+
+  <!-- PANEL: INFER -->
+  <div class="panel" id="panel-infer">
+    <div class="card">
+      <h2>Inferenza ICD con Motore LLM</h2>
+      <p style="font-size:.83rem;color:#718096;margin-bottom:.8rem">
+        Inserisci una o più descrizioni cliniche (diagnosi, sintomi, interventi…).<br>
+        Se non è configurata una chiave API OpenAI il sistema utilizza la modalità <strong>euristica</strong> locale.
+      </p>
+      <div class="form-row">
+        <div class="form-group" style="flex:3">
+          <label>Descrizioni cliniche (una per riga)</label>
+          <textarea id="infer-desc" rows="4" placeholder="es.&#10;Paziente con dolore toracico acuto e dispnea&#10;Ipertensione arteriosa in trattamento&#10;Pregresso infarto miocardico"></textarea>
+        </div>
+        <div class="form-group" style="max-width:100px">
+          <label>Max risultati</label>
+          <input type="number" id="infer-max" value="5" min="1" max="20" />
+        </div>
+      </div>
+      <button class="btn green" onclick="doInfer()">Analizza</button>
+      <div class="examples" style="margin-top:.7rem">
+        <span>Esempi:</span>
+        <span class="example-chip" onclick="setInfer('Paziente con dolore toracico acuto, ST sopraslivellato in V1-V4, troponina elevata')">IMA anteriore</span>
+        <span class="example-chip" onclick="setInfer('Dispnea ingravescente, edemi declivi, FE ridotta al 30%\nFibrillazione atriale permanente')">SC+FA</span>
+        <span class="example-chip" onclick="setInfer('Diabete mellito tipo 2 scompensato con chetonemia\nIpertensione arteriosa\nObesità BMI 38')">Metabolico</span>
+        <span class="example-chip" onclick="setInfer('Lombalgia cronica con ernia discale L4-L5\nStenosi del canale spinale')">Ortopedico</span>
+        <span class="example-chip" onclick="setInfer('Appendicite acuta con peritonite localizzata\nIntervento di appendicectomia laparoscopica')">Chirurgico</span>
+        <span class="example-chip" onclick="setInfer('Polmonite batterica lobo inferiore destro\nInsuffficienza respiratoria acuta ipossiemica\nVentilazione non invasiva')">Respiratorio</span>
+      </div>
+    </div>
+    <div id="result-infer"></div>
+  </div>
+
+  <!-- PANEL: API -->
+  <div class="panel" id="panel-api">
+    <div class="api-layout">
+
+      <!-- LEFT: endpoint list -->
+      <div>
+        <div class="card" style="padding:1.25rem 1.25rem 1.5rem">
+          <h2 style="margin-bottom:.2rem">Riferimento API</h2>
+          <p style="font-size:.82rem;color:#718096;margin-bottom:.75rem">Base URL: <code>/api/v1</code> · Formato: JSON · Errori: <code>{"error":"..."}</code></p>
+
+          <div class="api-section-title">ICD-9-CM</div>
+
+          <div class="api-ep-card" id="ep1">
+            <div class="api-ep-header">
+              <span class="api-method get">GET</span>
+              <code class="api-ep-path">/api/v1/icd9/{code}</code>
+              <button class="api-try-btn" onclick="tryApi('/api/v1/icd9/410.1','ep1')">&#x25B6; Prova</button>
+            </div>
+            <div class="api-ep-body">
+              <div class="desc">Restituisce la voce ICD-9 corrispondente al codice specificato.</div>
+              <div class="api-param-row" style="margin-top:.4rem">
+                <span class="api-param-name">code</span><span class="api-param-badge">path</span>
+                <span>codice ICD-9, es. <code>410.1</code></span>
+              </div>
+              <div class="api-resp-schema"><strong>200</strong> <code>{ code, description, category, mappings[] }</code> &nbsp; <strong>404</strong> codice non trovato</div>
+            </div>
+          </div>
+
+          <div class="api-ep-card" id="ep2">
+            <div class="api-ep-header">
+              <span class="api-method get">GET</span>
+              <code class="api-ep-path">/api/v1/icd9/{code}/to-icd10</code>
+              <button class="api-try-btn" onclick="tryApi('/api/v1/icd9/410.1/to-icd10','ep2')">&#x25B6; Prova</button>
+            </div>
+            <div class="api-ep-body">
+              <div class="desc">Converte un codice ICD-9 nei corrispondenti codici ICD-10-IM.</div>
+              <div class="api-param-row" style="margin-top:.4rem">
+                <span class="api-param-name">code</span><span class="api-param-badge">path</span>
+                <span>codice ICD-9 da convertire</span>
+              </div>
+              <div class="api-resp-schema"><strong>200</strong> <code>{ source: {...}, mappings: [{...}] }</code></div>
+            </div>
+          </div>
+
+          <div class="api-ep-card" id="ep3">
+            <div class="api-ep-header">
+              <span class="api-method get">GET</span>
+              <code class="api-ep-path">/api/v1/icd9</code>
+              <button class="api-try-btn" onclick="tryApi('/api/v1/icd9?page=1&amp;limit=5','ep3')">&#x25B6; Prova</button>
+            </div>
+            <div class="api-ep-body">
+              <div class="desc">Lista paginata di tutti i codici ICD-9.</div>
+              <div class="api-param-row" style="margin-top:.4rem">
+                <span class="api-param-name">page</span><span class="api-param-badge">query</span><span>numero pagina (default 1)</span>
+              </div>
+              <div class="api-param-row">
+                <span class="api-param-name">limit</span><span class="api-param-badge">query</span><span>risultati per pagina (default 20, max 200)</span>
+              </div>
+              <div class="api-param-row">
+                <span class="api-param-name">category</span><span class="api-param-badge">query</span><span>filtro per capitolo (facoltativo)</span>
+              </div>
+              <div class="api-resp-schema"><strong>200</strong> <code>{ total, page, limit, items: [{...}] }</code></div>
+            </div>
+          </div>
+
+          <div class="api-section-title">ICD-10-IM</div>
+
+          <div class="api-ep-card" id="ep4">
+            <div class="api-ep-header">
+              <span class="api-method get">GET</span>
+              <code class="api-ep-path">/api/v1/icd10/{code}</code>
+              <button class="api-try-btn" onclick="tryApi('/api/v1/icd10/I21.0','ep4')">&#x25B6; Prova</button>
+            </div>
+            <div class="api-ep-body">
+              <div class="desc">Restituisce la voce ICD-10-IM corrispondente al codice specificato.</div>
+              <div class="api-param-row" style="margin-top:.4rem">
+                <span class="api-param-name">code</span><span class="api-param-badge">path</span>
+                <span>codice ICD-10-IM, es. <code>I21.0</code></span>
+              </div>
+              <div class="api-resp-schema"><strong>200</strong> <code>{ code, description, category, mappings[] }</code> &nbsp; <strong>404</strong> codice non trovato</div>
+            </div>
+          </div>
+
+          <div class="api-ep-card" id="ep5">
+            <div class="api-ep-header">
+              <span class="api-method get">GET</span>
+              <code class="api-ep-path">/api/v1/icd10/{code}/to-icd9</code>
+              <button class="api-try-btn" onclick="tryApi('/api/v1/icd10/I21.0/to-icd9','ep5')">&#x25B6; Prova</button>
+            </div>
+            <div class="api-ep-body">
+              <div class="desc">Converte un codice ICD-10-IM nei corrispondenti codici ICD-9.</div>
+              <div class="api-param-row" style="margin-top:.4rem">
+                <span class="api-param-name">code</span><span class="api-param-badge">path</span>
+                <span>codice ICD-10-IM da convertire</span>
+              </div>
+              <div class="api-resp-schema"><strong>200</strong> <code>{ source: {...}, mappings: [{...}] }</code></div>
+            </div>
+          </div>
+
+          <div class="api-ep-card" id="ep6">
+            <div class="api-ep-header">
+              <span class="api-method get">GET</span>
+              <code class="api-ep-path">/api/v1/icd10</code>
+              <button class="api-try-btn" onclick="tryApi('/api/v1/icd10?page=1&amp;limit=5','ep6')">&#x25B6; Prova</button>
+            </div>
+            <div class="api-ep-body">
+              <div class="desc">Lista paginata di tutti i codici ICD-10-IM.</div>
+              <div class="api-param-row" style="margin-top:.4rem">
+                <span class="api-param-name">page</span><span class="api-param-badge">query</span><span>numero pagina (default 1)</span>
+              </div>
+              <div class="api-param-row">
+                <span class="api-param-name">limit</span><span class="api-param-badge">query</span><span>risultati per pagina (default 20, max 200)</span>
+              </div>
+              <div class="api-param-row">
+                <span class="api-param-name">category</span><span class="api-param-badge">query</span><span>filtro per capitolo (facoltativo)</span>
+              </div>
+              <div class="api-resp-schema"><strong>200</strong> <code>{ total, page, limit, items: [{...}] }</code></div>
+            </div>
+          </div>
+
+          <div class="api-section-title">Ricerca &amp; Inferenza</div>
+
+          <div class="api-ep-card" id="ep7">
+            <div class="api-ep-header">
+              <span class="api-method get">GET</span>
+              <code class="api-ep-path">/api/v1/search</code>
+              <button class="api-try-btn" onclick="tryApi('/api/v1/search?q=infarto&amp;version=icd9','ep7')">&#x25B6; Prova</button>
+            </div>
+            <div class="api-ep-body">
+              <div class="desc">Ricerca full-text nelle descrizioni ICD-9 e/o ICD-10-IM.</div>
+              <div class="api-param-row" style="margin-top:.4rem">
+                <span class="api-param-name">q</span><span class="api-param-badge">query · obbligatorio</span><span>testo da cercare</span>
+              </div>
+              <div class="api-param-row">
+                <span class="api-param-name">version</span><span class="api-param-badge">query</span><span><code>icd9</code> | <code>icd10</code> | <code>both</code> (default)</span>
+              </div>
+              <div class="api-resp-schema"><strong>200</strong> <code>{ query, icd9_results: [{code, description, score}], icd10_results: [...] }</code></div>
+            </div>
+          </div>
+
+          <div class="api-ep-card" id="ep8">
+            <div class="api-ep-header">
+              <span class="api-method post">POST</span>
+              <code class="api-ep-path">/api/v1/infer</code>
+              <button class="api-try-btn" onclick="tryApiPost('ep8')">&#x25B6; Prova</button>
+            </div>
+            <div class="api-ep-body">
+              <div class="desc">Inferenza LLM: suggerisce codici ICD da descrizioni cliniche in linguaggio libero.</div>
+              <div style="margin-top:.45rem">
+                <div style="font-size:.76rem;font-weight:600;color:#718096;margin-bottom:.25rem">BODY JSON</div>
+                <pre style="background:#f1f5f9;border-radius:5px;padding:.5rem .7rem;font-size:.76rem;overflow-x:auto;margin:0">{
+  &quot;descriptions&quot;: [&quot;infarto miocardico acuto anteriore&quot;],
+  &quot;version&quot;: &quot;both&quot;,
+  &quot;max_results&quot;: 5
+}</pre>
+              </div>
+              <div class="api-param-row" style="margin-top:.45rem">
+                <span class="api-param-name">descriptions</span><span class="api-param-badge">obbligatorio</span><span>array di stringhe cliniche</span>
+              </div>
+              <div class="api-param-row">
+                <span class="api-param-name">version</span><span class="api-param-badge">opzionale</span><span><code>icd9</code> | <code>icd10</code> | <code>both</code></span>
+              </div>
+              <div class="api-param-row">
+                <span class="api-param-name">max_results</span><span class="api-param-badge">opzionale</span><span>intero (default 5)</span>
+              </div>
+              <div class="api-resp-schema"><strong>200</strong> <code>{ descriptions, icd9_suggestions: [{code, description, confidence, rationale}], icd10_suggestions: [...], mode, model }</code></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- RIGHT: sticky response pane -->
+      <div>
+        <div class="card api-response-card">
+          <div id="api-response-pane">
+            <div class="api-placeholder">
+              <div style="font-size:2.2rem;line-height:1">&#x1F4E1;</div>
+              <div>Clicca <strong>&#x25B6; Prova</strong><br>su un endpoint per vedere<br>la risposta qui</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- PANEL: INFO -->
+  <div class="panel" id="panel-info">
+    <div class="card">
+      <h2>Fonti dei Dati</h2>
+      <p style="font-size:.85rem;color:#4a5568;margin-bottom:1rem">
+        Tutti i dati ICD utilizzati in questa applicazione provengono da fonti ufficiali del <strong>Ministero della Salute italiano</strong>
+        e dell'<strong>Organizzazione Mondiale della Sanità (OMS)</strong>.
+      </p>
+
+      <h3 style="font-size:.95rem;color:#1a56db;margin:.8rem 0 .4rem">ICD-9-CM — Classificazione Internazionale delle Malattie, 9ª revisione, Modificazione Clinica</h3>
+      <div class="icd-card">
+        <div class="code">Diagnosi ICD-9-CM</div>
+        <div class="desc">16.212 codici di diagnosi in lingua italiana (versione 2007 con correzioni).</div>
+        <div class="desc" style="margin-top:.4rem">
+          Fonte: <a href="https://www.salute.gov.it/new/it/tema/assistenza-ospedaliera/il-manuale-icd9cm/" target="_blank" style="color:#1a56db">Ministero della Salute — Manuale ICD-9-CM</a>
+        </div>
+        <span class="badge">16.212 codici</span>
+        <span class="badge">Italiano</span>
+        <span class="badge">Versione 2007</span>
+      </div>
+      <div class="icd-card">
+        <div class="code">Procedure ICD-9-CM (Volume 3)</div>
+        <div class="desc">4.460 codici di procedura in lingua italiana.</div>
+        <div class="desc" style="margin-top:.4rem">
+          Fonte: <a href="https://www.salute.gov.it/new/it/tema/assistenza-ospedaliera/il-manuale-icd9cm/" target="_blank" style="color:#1a56db">Ministero della Salute — Manuale ICD-9-CM</a>
+        </div>
+        <span class="badge">4.460 codici</span>
+        <span class="badge">Italiano</span>
+      </div>
+
+      <h3 style="font-size:.95rem;color:#1a56db;margin:.8rem 0 .4rem">ICD-10-IM — Classificazione Internazionale delle Malattie, 10ª revisione, versione Italiana per uso del Ministero della Salute</h3>
+      <div class="icd-card">
+        <div class="code">Elenco Sistematico ICD-10-IM v.GAMMA 2.1</div>
+        <div class="desc">14.773 codici ICD-10-IM in lingua italiana, validi dal 16 febbraio 2026.</div>
+        <div class="desc" style="margin-top:.4rem">
+          Fonte: <a href="https://www.salute.gov.it/new/it/tema/assistenza-ospedaliera-sdo/documentazione-tecnica/" target="_blank" style="color:#1a56db">Ministero della Salute — Documentazione tecnica SDO</a>
+        </div>
+        <span class="badge">14.773 codici</span>
+        <span class="badge">Italiano</span>
+        <span class="badge">Validità: 16/02/2026</span>
+      </div>
+      <div class="icd-card">
+        <div class="code">Tabella di Transcodifica Bidirezionale ICD-9-CM ↔ ICD-10-IM v.GAMMA 2.1</div>
+        <div class="desc">18.189 mappature ufficiali bidirezionali tra ICD-9-CM e ICD-10-IM.</div>
+        <div class="desc" style="margin-top:.4rem">
+          Fonte: <a href="https://www.salute.gov.it/new/it/tema/assistenza-ospedaliera-sdo/documentazione-tecnica/" target="_blank" style="color:#1a56db">Ministero della Salute — Documentazione tecnica SDO</a>
+        </div>
+        <span class="badge">18.189 mappature</span>
+        <span class="badge">Dicembre 2025</span>
+      </div>
+
+      <h3 style="font-size:.95rem;color:#1a56db;margin:.8rem 0 .4rem">Nota sull'utilizzo ufficiale</h3>
+      <div class="icd-card" style="background:#fffbeb;border-color:#fcd34d">
+        <div class="desc">
+          Per gli usi ufficiali dei codici di diagnosi all'interno dei flussi informativi NSIS resta valido lo standard
+          <strong>ICD-9-CM per tutto il 2026</strong>. ICD-10-IM è in fase di sperimentazione nell'ambito del
+          Progetto NSIS-CLASS (DM 23 ottobre 2025) e rappresenta un prototipo soggetto ad aggiornamento.
+        </div>
+        <div class="desc" style="margin-top:.4rem">
+          Riferimento: <a href="https://www.salute.gov.it/new/it/tema/assistenza-ospedaliera-sdo/la-classificazione-delle-diagnosi-icd-10-im/" target="_blank" style="color:#1a56db">Ministero della Salute — ICD-10-IM</a>
+        </div>
+      </div>
+
+      <h3 style="font-size:.95rem;color:#1a56db;margin:.8rem 0 .4rem">Licenza</h3>
+      <div class="icd-card">
+        <div class="desc">
+          ICD-10-IM è distribuita con licenza <strong>CC BY-NC-ND 4.0</strong>.<br>
+          Titolari: Ministero della Salute e Regione Autonoma Friuli Venezia Giulia.<br>
+          La traduzione italiana di ICD-10 è stata realizzata dal Centro collaboratore italiano dell'OMS per la Famiglia delle Classificazioni Internazionali.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL: LIST -->
+  <div class="panel" id="panel-list">
+    <div class="card">
+      <h2>Esplora Codici ICD</h2>
+      <div class="form-row">
+        <div class="form-group" style="max-width:120px">
+          <label>Versione</label>
+          <select id="list-ver">
+            <option value="icd9">ICD-9</option>
+            <option value="icd10">ICD-10</option>
+          </select>
+        </div>
+        <div class="form-group" style="max-width:170px">
+          <label>Categoria</label>
+          <select id="list-cat">
+            <option value="">Tutte</option>
+            <option>Malattie infettive e parassitarie</option>
+            <option>Tumori</option>
+            <option>Malattie delle ghiandole endocrine, nutrizione e metabolismo</option>
+            <option>Malattie del sangue e degli organi ematopoietici</option>
+            <option>Disturbi mentali</option>
+            <option>Malattie del sistema nervoso e degli organi di senso</option>
+            <option>Malattie del sistema circolatorio</option>
+            <option>Malattie dell'apparato respiratorio</option>
+            <option>Malattie dell'apparato digerente</option>
+            <option>Malattie dell'apparato genitourinario</option>
+            <option>Complicazioni della gravidanza, del parto e del puerperio</option>
+            <option>Malattie della pelle e del tessuto sottocutaneo</option>
+            <option>Malattie del sistema osteomuscolare e del tessuto connettivo</option>
+            <option>Malformazioni congenite</option>
+            <option>Sintomi, segni e stati morbosi mal definiti</option>
+            <option>Traumatismi e avvelenamenti</option>
+            <option>Fattori influenzanti lo stato di salute</option>
+            <option>Cause esterne di traumatismo</option>
+            <option>Procedure ed interventi</option>
+          </select>
+        </div>
+        <div class="form-group" style="max-width:80px">
+          <label>Pagina</label>
+          <input type="number" id="list-page" value="1" min="1" />
+        </div>
+        <div class="form-group" style="max-width:80px">
+          <label>Per pagina</label>
+          <input type="number" id="list-limit" value="20" min="1" max="100" />
+        </div>
+        <button class="btn" onclick="doList()">Carica</button>
+      </div>
+    </div>
+    <div id="result-list"></div>
+  </div>
+
+</main>
+
+<script>
+const BASE = '/api/v1';
+
+/* ── TAB SWITCHING ─────────────────────────────────────────── */
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach((b,i) => {
+    const panels = ['convert','search','infer','list','info','api'];
+    b.classList.toggle('active', panels[i] === name);
+  });
+  document.querySelectorAll('.panel').forEach(p => {
+    p.classList.toggle('active', p.id === 'panel-' + name);
+  });
+}
+
+/* ── HELPERS ───────────────────────────────────────────────── */
+async function apiFetch(url, opts) {
+  const res = await fetch(url, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+function renderJSON(data) {
+  return JSON.stringify(data, null, 2);
+}
+
+function entryHtml(e, confidence, rationale) {
+  const conf = confidence !== undefined
+    ? `<span class="confidence">Conf. ${(confidence*100).toFixed(0)}%</span>` : '';
+  const rat  = rationale ? `<div class="rationale">${escHtml(rationale)}</div>` : '';
+  return `<div class="icd-card">
+    ${conf}
+    <div class="code">${escHtml(e.code)}</div>
+    <div class="desc">${escHtml(e.description)}</div>
+    <span class="badge">${escHtml(e.category)}</span>
+    ${rat}
+  </div>`;
+}
+
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function twoColResults(icd9, icd10, container) {
+  let html = '<div class="result-grid">';
+  html += `<div class="result-section"><h3>ICD-9 (${icd9.length} risultati)</h3>`;
+  if (icd9.length) icd9.forEach(r => html += entryHtml(r, r.confidence, r.rationale));
+  else html += '<p style="color:#718096;font-size:.85rem">Nessun risultato.</p>';
+  html += '</div>';
+  html += `<div class="result-section"><h3>ICD-10 (${icd10.length} risultati)</h3>`;
+  if (icd10.length) icd10.forEach(r => html += entryHtml(r, r.confidence, r.rationale));
+  else html += '<p style="color:#718096;font-size:.85rem">Nessun risultato.</p>';
+  html += '</div></div>';
+  document.getElementById(container).innerHTML = html;
+}
+
+/* ── CONVERT ───────────────────────────────────────────────── */
+function setConv(dir, code) {
+  document.getElementById('conv-dir').value = dir;
+  document.getElementById('conv-code').value = code;
+  switchTab('convert');
+  doConvert();
+}
+
+async function doConvert() {
+  const dir  = document.getElementById('conv-dir').value;
+  const code = document.getElementById('conv-code').value.trim();
+  const out  = document.getElementById('result-convert');
+  if (!code) { out.innerHTML = '<p style="color:#e53e3e">Inserisci un codice.</p>'; return; }
+
+  const [srcVer, , dstVer] = dir.split('-');
+  const url = `${BASE}/${srcVer}/${encodeURIComponent(code)}/to-${dstVer}`;
+  out.innerHTML = '<p style="color:#718096">Caricamento…</p>';
+  try {
+    const data = await apiFetch(url);
+    let html = `<div class="card">
+      <h2>Sorgente (${srcVer.toUpperCase()})</h2>
+      ${entryHtml(data.source)}
+      <h2 style="margin-top:1rem">Equivalenti (${dstVer.toUpperCase()}) — ${data.mappings.length} trovati</h2>`;
+    if (data.mappings.length)
+      data.mappings.forEach(m => html += entryHtml(m));
+    else
+      html += '<p style="color:#718096;font-size:.85rem">Nessuna mappatura disponibile nel dataset locale.</p>';
+    html += `<span class="raw-toggle" onclick="toggleRaw('raw-conv')">↓ JSON grezzo</span>
+      <pre id="raw-conv" style="display:none;margin-top:.5rem;background:#1a202c;color:#a3e635;padding:.8rem;border-radius:6px;font-size:.78rem;overflow:auto">${escHtml(renderJSON(data))}</pre>
+    </div>`;
+    out.innerHTML = html;
+  } catch(e) {
+    out.innerHTML = `<p style="color:#e53e3e">${escHtml(e.message)}</p>`;
+  }
+}
+
+/* ── SEARCH ────────────────────────────────────────────────── */
+function setSearch(q) {
+  document.getElementById('search-q').value = q;
+  switchTab('search');
+  doSearch();
+}
+
+async function doSearch() {
+  const q   = document.getElementById('search-q').value.trim();
+  const ver = document.getElementById('search-ver').value;
+  const out = document.getElementById('result-search');
+  if (!q) { out.innerHTML = '<p style="color:#e53e3e">Inserisci un testo.</p>'; return; }
+
+  out.innerHTML = '<p style="color:#718096">Ricerca…</p>';
+  try {
+    const data = await apiFetch(`${BASE}/search?q=${encodeURIComponent(q)}&version=${ver}`);
+    twoColResults(data.icd9_results || [], data.icd10_results || [], 'result-search');
+  } catch(e) {
+    out.innerHTML = `<p style="color:#e53e3e">${escHtml(e.message)}</p>`;
+  }
+}
+
+/* ── INFER ─────────────────────────────────────────────────── */
+function setInfer(text) {
+  document.getElementById('infer-desc').value = text;
+  switchTab('infer');
+  doInfer();
+}
+
+async function doInfer() {
+  const raw  = document.getElementById('infer-desc').value;
+  const maxR = parseInt(document.getElementById('infer-max').value) || 5;
+  const out  = document.getElementById('result-infer');
+  const descs = raw.split('\n').map(s => s.trim()).filter(Boolean);
+  if (!descs.length) { out.innerHTML = '<p style="color:#e53e3e">Inserisci almeno una descrizione.</p>'; return; }
+
+  out.innerHTML = '<p style="color:#718096">Analisi in corso…</p>';
+  try {
+    const data = await apiFetch(`${BASE}/infer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ descriptions: descs, max_results: maxR })
+    });
+    out.innerHTML = `<div class="card" style="margin-bottom:.5rem">
+      <small style="color:#718096">Modalità: <strong>${escHtml(data.mode)}</strong>${data.model ? ' · Modello: <strong>' + escHtml(data.model) + '</strong>' : ''}</small>
+    </div><div id="result-infer-grid"></div>`;
+    twoColResults(data.icd9_suggestions||[], data.icd10_suggestions||[], 'result-infer-grid');
+  } catch(e) {
+    out.innerHTML = `<p style="color:#e53e3e">${escHtml(e.message)}</p>`;
+  }
+}
+
+/* ── LIST ──────────────────────────────────────────────────── */
+async function doList() {
+  const ver   = document.getElementById('list-ver').value;
+  const cat   = document.getElementById('list-cat').value;
+  const page  = document.getElementById('list-page').value;
+  const limit = document.getElementById('list-limit').value;
+  const out   = document.getElementById('result-list');
+
+  let url = `${BASE}/${ver}?page=${page}&limit=${limit}`;
+  if (cat) url += `&category=${encodeURIComponent(cat)}`;
+
+  out.innerHTML = '<p style="color:#718096">Caricamento…</p>';
+  try {
+    const data = await apiFetch(url);
+    let html = `<div class="card"><p style="font-size:.85rem;color:#718096;margin-bottom:.8rem">
+      Totale: <strong>${data.total}</strong> · Pagina ${data.page} · ${data.limit} per pagina</p>`;
+    (data.items || []).forEach(e => html += entryHtml(e));
+    // pagination controls
+    html += `<div style="display:flex;gap:.5rem;margin-top:1rem;align-items:center">`;
+    if (data.page > 1) html += `<button class="btn" style="padding:.3rem .8rem" onclick="changePage(${data.page-1})">← Prev</button>`;
+    if (data.items.length === data.limit) html += `<button class="btn" style="padding:.3rem .8rem" onclick="changePage(${data.page+1})">Next →</button>`;
+    html += `</div></div>`;
+    out.innerHTML = html;
+  } catch(e) {
+    out.innerHTML = `<p style="color:#e53e3e">${escHtml(e.message)}</p>`;
+  }
+}
+
+function changePage(p) {
+  document.getElementById('list-page').value = p;
+  doList();
+}
+
+function toggleRaw(id) {
+  const el = document.getElementById(id);
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    const active = document.querySelector('.panel.active');
+    if (!active) return;
+    if (active.id === 'panel-convert') doConvert();
+    if (active.id === 'panel-search')  doSearch();
+  }
+});
+
+/* ── API PLAYGROUND ─────────────────────────────────────────── */
+function _apiSetActive(cardId) {
+  document.querySelectorAll('.api-ep-card').forEach(c => c.classList.remove('api-ep-active'));
+  if (cardId) document.getElementById(cardId)?.classList.add('api-ep-active');
+}
+function _apiSetLoading(method, url) {
+  document.getElementById('api-response-pane').innerHTML =
+    `<div class="api-resp-header">
+       <span class="api-method ${method.toLowerCase()}">${method}</span>
+       <code style="font-size:.8rem;color:#4a5568;flex:1;word-break:break-all">${escHtml(url)}</code>
+     </div>
+     <pre class="api-resp-body" style="color:#a0aec0">Caricamento…</pre>`;
+}
+function _apiSetResult(method, url, status, statusText, data) {
+  const ok = status >= 200 && status < 300;
+  document.getElementById('api-response-pane').innerHTML =
+    `<div class="api-resp-header">
+       <span class="api-method ${method.toLowerCase()}">${method}</span>
+       <code style="font-size:.8rem;color:#4a5568;flex:1;word-break:break-all">${escHtml(url)}</code>
+       <span style="font-size:.8rem;font-weight:700;color:${ok?'#0e9f6e':'#e02424'};white-space:nowrap">${status} ${escHtml(statusText)}</span>
+     </div>
+     <pre class="api-resp-body">${escHtml(JSON.stringify(data, null, 2))}</pre>`;
+}
+function _apiSetError(method, url, msg) {
+  document.getElementById('api-response-pane').innerHTML =
+    `<div class="api-resp-header">
+       <span class="api-method ${method.toLowerCase()}">${method}</span>
+       <code style="font-size:.8rem;color:#4a5568;flex:1">${escHtml(url)}</code>
+       <span style="color:#e02424;font-weight:700">Errore di rete</span>
+     </div>
+     <pre class="api-resp-body" style="color:#fc8181">${escHtml(msg)}</pre>`;
+}
+
+async function tryApi(url, cardId) {
+  _apiSetActive(cardId);
+  _apiSetLoading('GET', url);
+  try {
+    const r = await fetch(url);
+    const data = await r.json();
+    _apiSetResult('GET', url, r.status, r.statusText, data);
+  } catch(e) { _apiSetError('GET', url, e.message); }
+}
+
+async function tryApiPost(cardId) {
+  const url = '/api/v1/infer';
+  const body = { descriptions: ['infarto miocardico acuto anteriore'], version: 'both', max_results: 3 };
+  _apiSetActive(cardId);
+  _apiSetLoading('POST', url);
+  try {
+    const r = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const data = await r.json();
+    _apiSetResult('POST', url, r.status, r.statusText, data);
+  } catch(e) { _apiSetError('POST', url, e.message); }
+}
+</script>
+</body>
+</html>
