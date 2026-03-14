@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ICD Converter – Test UI</title>
+  <title>ICD Converter</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -301,6 +301,168 @@
       margin-top: .45rem;
     }
     .api-resp-schema code { color: #1a56db; font-size: .76rem; }
+
+    /* ── Improved search results ───────────────────────────── */
+    .search-results-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.25rem;
+      margin-top: 1rem;
+    }
+    @media(max-width:640px){ .search-results-grid { grid-template-columns: 1fr; } }
+
+    .search-section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: .65rem;
+      padding-bottom: .4rem;
+      border-bottom: 2px solid #e2e8f0;
+    }
+    .search-section-title {
+      font-size: .95rem;
+      font-weight: 700;
+      color: #1a56db;
+    }
+    .search-count-badge {
+      font-size: .72rem;
+      background: #ebf4ff;
+      color: #1a56db;
+      padding: .15rem .55rem;
+      border-radius: 20px;
+      font-weight: 700;
+    }
+
+    .search-card {
+      border: 1.5px solid #e2e8f0;
+      border-left: 4px solid #1a56db;
+      border-radius: 6px;
+      padding: .65rem .85rem;
+      margin-bottom: .5rem;
+      background: #fff;
+      transition: box-shadow .15s, border-left-color .15s;
+    }
+    .search-card:hover {
+      box-shadow: 0 2px 10px rgba(26,86,219,.12);
+      border-left-color: #0e9f6e;
+    }
+    .search-card.is-parent {
+      border-left-color: #9f7aea;
+      background: #faf5ff;
+    }
+    .search-card.is-parent:hover { border-left-color: #6b46c1; }
+
+    .search-card-header {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      margin-bottom: .3rem;
+    }
+    .search-code {
+      font-size: 1rem;
+      font-weight: 800;
+      color: #1a56db;
+      font-family: monospace;
+      letter-spacing: .04em;
+    }
+    .parent-pill {
+      font-size: .62rem;
+      background: #e9d8fd;
+      color: #553c9a;
+      padding: .1rem .45rem;
+      border-radius: 20px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+
+    .search-desc {
+      font-size: .85rem;
+      color: #2d3748;
+      margin-bottom: .35rem;
+      line-height: 1.45;
+    }
+    .desc-parent-part { color: #718096; font-size: .8rem; }
+    .desc-sep { color: #a0aec0; margin: 0 .25rem; }
+    .desc-child-part { color: #2d3748; font-weight: 500; }
+
+    .search-meta {
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+      flex-wrap: wrap;
+    }
+    .search-category-tag {
+      font-size: .68rem;
+      background: #f0f4f8;
+      color: #4a5568;
+      border: 1px solid #e2e8f0;
+      padding: .1rem .45rem;
+      border-radius: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 200px;
+    }
+    .score-pill {
+      font-size: .68rem;
+      font-weight: 700;
+      padding: .1rem .45rem;
+      border-radius: 20px;
+      margin-left: auto;
+      white-space: nowrap;
+    }
+    .score-high { background: #def7ec; color: #03543f; }
+    .score-med  { background: #fef3c7; color: #92400e; }
+    .score-low  { background: #fde8e8; color: #9b1c1c; }
+
+    /* ── Expand children ──────────────────────────────────────── */
+    .expand-trigger-row { margin-top: .45rem; }
+    .expand-parent-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: .3rem;
+      padding: .17rem .6rem;
+      border: 1.5px solid #bee3f8;
+      border-radius: 20px;
+      background: #ebf4ff;
+      color: #1a56db;
+      font-size: .71rem;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background .15s, color .15s, border-color .15s;
+    }
+    .expand-parent-btn:hover { background: #dbeafe; border-color: #93c5fd; }
+    .expand-parent-btn.open  { background: #1a56db; color: #fff; border-color: #1a56db; }
+    .expand-children-container {
+      margin-top: .55rem;
+      padding-top: .5rem;
+      border-top: 1.5px dashed #e2e8f0;
+    }
+    .expand-panel-header {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      flex-wrap: wrap;
+      margin-bottom: .45rem;
+      padding-bottom: .35rem;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .expand-panel-parent-code { font-size: .88rem; font-weight: 800; color: #6b46c1; font-family: monospace; }
+    .expand-panel-parent-desc { font-size: .8rem; color: #553c9a; flex: 1; min-width: 0; }
+    .expand-child-row {
+      display: flex;
+      align-items: baseline;
+      gap: .55rem;
+      padding: .22rem 0;
+      border-bottom: 1px solid #f7f8fa;
+      font-size: .82rem;
+    }
+    .expand-child-row:last-child { border-bottom: none; }
+    .expand-child-code { flex-shrink: 0; font-family: monospace; font-size: .8rem; font-weight: 700; color: #1a56db; min-width: 3.8rem; }
+    .expand-child-desc-text { color: #2d3748; line-height: 1.35; }
+    .expand-loading { color: #718096; font-size: .8rem; font-style: italic; padding: .25rem 0; }
   </style>
 </head>
 <body>
@@ -318,8 +480,8 @@
     <button class="tab-btn" onclick="switchTab('search')">Ricerca Testuale</button>
     <button class="tab-btn" onclick="switchTab('infer')">Ricerca Similiarità</button>
     <button class="tab-btn" onclick="switchTab('list')">Esplora Codici</button>
-    <button class="tab-btn" onclick="switchTab('info')">ℹ Info &amp; Fonti</button>
-    <button class="tab-btn" onclick="switchTab('api')">&#x1F4CB; API</button>
+    <button class="tab-btn" onclick="switchTab('info')">Info</button>
+    <a class="tab-btn" href="/ui/swagger.html" target="_blank" style="text-decoration:none;margin-left:auto">API Docs ↗</a>
   </div>
 
   <!-- PANEL: CONVERT -->
@@ -393,223 +555,59 @@
     <div id="result-search"></div>
   </div>
 
-  <!-- PANEL: INFER -->
+  <!-- PANEL: SIMILARITY SEARCH -->
   <div class="panel" id="panel-infer">
     <div class="card">
-      <h2>Inferenza ICD con Motore LLM</h2>
+      <h2>Ricerca per Similitudine Semantica</h2>
       <p style="font-size:.83rem;color:#718096;margin-bottom:.8rem">
-        Inserisci una o più descrizioni cliniche (diagnosi, sintomi, interventi…).<br>
-        Se non è configurata una chiave API OpenAI il sistema utilizza la modalità <strong>euristica</strong> locale.
+        Inserisci un testo clinico libero. Il sistema può operare in due modalità:<br>
+        <strong>Euristica</strong> — ricerca per parole chiave, sempre disponibile.<br>
+        <strong>Embedding</strong> — similarità vettoriale con modello AI (richiede <code>LLM_EMBED_MODEL</code>, es. <code>nomic-embed-text</code> via Ollama).
       </p>
       <div class="form-row">
-        <div class="form-group" style="flex:3">
-          <label>Descrizioni cliniche (una per riga)</label>
-          <textarea id="infer-desc" rows="4" placeholder="es.&#10;Paziente con dolore toracico acuto e dispnea&#10;Ipertensione arteriosa in trattamento&#10;Pregresso infarto miocardico"></textarea>
-        </div>
-        <div class="form-group" style="max-width:100px">
-          <label>Max risultati</label>
-          <input type="number" id="infer-max" value="5" min="1" max="20" />
+        <div class="form-group" style="flex:1 1 100%;min-width:0">
+          <label>Testo clinico libero</label>
+          <textarea id="sem-q" rows="5" placeholder="es. paziente con dolore toracico irradiato al braccio sinistro, elevazione ST, infarto miocardico acuto anteriore…" style="resize:vertical;width:100%"></textarea>
         </div>
       </div>
-      <button class="btn green" onclick="doInfer()">Analizza</button>
-      <div class="examples" style="margin-top:.7rem">
+      <div class="form-row">
+        <div class="form-group" style="max-width:150px">
+          <label>Modalità</label>
+          <select id="sem-mode">
+            <option value="auto">Auto</option>
+            <option value="embedding">Embedding</option>
+            <option value="heuristic">Euristica</option>
+          </select>
+        </div>
+        <div class="form-group" style="max-width:130px">
+          <label>Versione</label>
+          <select id="sem-ver">
+            <option value="both">Entrambe</option>
+            <option value="icd9">Solo ICD-9</option>
+            <option value="icd10">Solo ICD-10</option>
+          </select>
+        </div>
+        <div class="form-group" style="max-width:90px">
+          <label>Risultati</label>
+          <input type="number" id="sem-limit" value="10" min="1" max="50" />
+        </div>
+        <button class="btn green" onclick="doSemanticSearch()">Cerca</button>
+      </div>
+      <div class="examples">
         <span>Esempi:</span>
-        <span class="example-chip" onclick="setInfer('Paziente con dolore toracico acuto, ST sopraslivellato in V1-V4, troponina elevata')">IMA anteriore</span>
-        <span class="example-chip" onclick="setInfer('Dispnea ingravescente, edemi declivi, FE ridotta al 30%\nFibrillazione atriale permanente')">SC+FA</span>
-        <span class="example-chip" onclick="setInfer('Diabete mellito tipo 2 scompensato con chetonemia\nIpertensione arteriosa\nObesità BMI 38')">Metabolico</span>
-        <span class="example-chip" onclick="setInfer('Lombalgia cronica con ernia discale L4-L5\nStenosi del canale spinale')">Ortopedico</span>
-        <span class="example-chip" onclick="setInfer('Appendicite acuta con peritonite localizzata\nIntervento di appendicectomia laparoscopica')">Chirurgico</span>
-        <span class="example-chip" onclick="setInfer('Polmonite batterica lobo inferiore destro\nInsuffficienza respiratoria acuta ipossiemica\nVentilazione non invasiva')">Respiratorio</span>
+        <span class="example-chip" onclick="setSemantic('paziente con dolore toracico irradiato al braccio sinistro, elevazione ST, infarto miocardico acuto anteriore')">infarto miocardico</span>
+        <span class="example-chip" onclick="setSemantic('aritmia cardiaca con frequenza ventricolare irregolare, fibrillazione atriale parossistica non valvolare')">fibrillazione atriale</span>
+        <span class="example-chip" onclick="setSemantic('iperglicemia cronica, resistenza insulinica, diabete mellito tipo 2 con complicanze renali')">diabete tipo 2</span>
+        <span class="example-chip" onclick="setSemantic('infiltrato polmonare lobo inferiore destro, febbre alta, polmonite batterica da pneumococco')">polmonite batterica</span>
+        <span class="example-chip" onclick="setSemantic('caduta accidentale in paziente anziana, frattura del collo del femore su base osteoporotica')">frattura femore</span>
+        <span class="example-chip" onclick="setSemantic('dispnea da sforzo, edemi declivi, insufficienza cardiaca congestizia con ridotta frazione di eiezione')">ins. cardiaca</span>
+        <span class="example-chip" onclick="setSemantic('lombalgia irradiata all'arto inferiore, ernia del disco lombare L4-L5 con compressione radicolare')">ernia discale</span>
+        <span class="example-chip" onclick="setSemantic('dolore addominale in fossa iliaca destra, febbre, appendicite acuta con peritonite localizzata')">appendicite</span>
+        <span class="example-chip" onclick="setSemantic('cefalea intensa a esordio improvviso, rigidità nucale, emorragia subaracnoidea da rottura aneurisma')">emorragia subaracnoidea</span>
+        <span class="example-chip" onclick="setSemantic('ictus ischemico del territorio dell'arteria cerebrale media, emiplegia destra, afasia')">ictus ischemico</span>
       </div>
     </div>
     <div id="result-infer"></div>
-  </div>
-
-  <!-- PANEL: API -->
-  <div class="panel" id="panel-api">
-    <div class="api-layout">
-
-      <!-- LEFT: endpoint list -->
-      <div>
-        <div class="card" style="padding:1.25rem 1.25rem 1.5rem">
-          <h2 style="margin-bottom:.2rem">Riferimento API</h2>
-          <p style="font-size:.82rem;color:#718096;margin-bottom:.75rem">Base URL: <code>/api/v1</code> · Formato: JSON · Errori: <code>{"error":"..."}</code></p>
-
-          <div class="api-section-title">ICD-9-CM</div>
-
-          <div class="api-ep-card" id="ep1">
-            <div class="api-ep-header">
-              <span class="api-method get">GET</span>
-              <code class="api-ep-path">/api/v1/icd9/{code}</code>
-              <button class="api-try-btn" onclick="tryApi('/api/v1/icd9/410.1','ep1')">&#x25B6; Prova</button>
-            </div>
-            <div class="api-ep-body">
-              <div class="desc">Restituisce la voce ICD-9 corrispondente al codice specificato.</div>
-              <div class="api-param-row" style="margin-top:.4rem">
-                <span class="api-param-name">code</span><span class="api-param-badge">path</span>
-                <span>codice ICD-9, es. <code>410.1</code></span>
-              </div>
-              <div class="api-resp-schema"><strong>200</strong> <code>{ code, description, category, mappings[] }</code> &nbsp; <strong>404</strong> codice non trovato</div>
-            </div>
-          </div>
-
-          <div class="api-ep-card" id="ep2">
-            <div class="api-ep-header">
-              <span class="api-method get">GET</span>
-              <code class="api-ep-path">/api/v1/icd9/{code}/to-icd10</code>
-              <button class="api-try-btn" onclick="tryApi('/api/v1/icd9/410.1/to-icd10','ep2')">&#x25B6; Prova</button>
-            </div>
-            <div class="api-ep-body">
-              <div class="desc">Converte un codice ICD-9 nei corrispondenti codici ICD-10-IM.</div>
-              <div class="api-param-row" style="margin-top:.4rem">
-                <span class="api-param-name">code</span><span class="api-param-badge">path</span>
-                <span>codice ICD-9 da convertire</span>
-              </div>
-              <div class="api-resp-schema"><strong>200</strong> <code>{ source: {...}, mappings: [{...}] }</code></div>
-            </div>
-          </div>
-
-          <div class="api-ep-card" id="ep3">
-            <div class="api-ep-header">
-              <span class="api-method get">GET</span>
-              <code class="api-ep-path">/api/v1/icd9</code>
-              <button class="api-try-btn" onclick="tryApi('/api/v1/icd9?page=1&amp;limit=5','ep3')">&#x25B6; Prova</button>
-            </div>
-            <div class="api-ep-body">
-              <div class="desc">Lista paginata di tutti i codici ICD-9.</div>
-              <div class="api-param-row" style="margin-top:.4rem">
-                <span class="api-param-name">page</span><span class="api-param-badge">query</span><span>numero pagina (default 1)</span>
-              </div>
-              <div class="api-param-row">
-                <span class="api-param-name">limit</span><span class="api-param-badge">query</span><span>risultati per pagina (default 20, max 200)</span>
-              </div>
-              <div class="api-param-row">
-                <span class="api-param-name">category</span><span class="api-param-badge">query</span><span>filtro per capitolo (facoltativo)</span>
-              </div>
-              <div class="api-resp-schema"><strong>200</strong> <code>{ total, page, limit, items: [{...}] }</code></div>
-            </div>
-          </div>
-
-          <div class="api-section-title">ICD-10-IM</div>
-
-          <div class="api-ep-card" id="ep4">
-            <div class="api-ep-header">
-              <span class="api-method get">GET</span>
-              <code class="api-ep-path">/api/v1/icd10/{code}</code>
-              <button class="api-try-btn" onclick="tryApi('/api/v1/icd10/I21.0','ep4')">&#x25B6; Prova</button>
-            </div>
-            <div class="api-ep-body">
-              <div class="desc">Restituisce la voce ICD-10-IM corrispondente al codice specificato.</div>
-              <div class="api-param-row" style="margin-top:.4rem">
-                <span class="api-param-name">code</span><span class="api-param-badge">path</span>
-                <span>codice ICD-10-IM, es. <code>I21.0</code></span>
-              </div>
-              <div class="api-resp-schema"><strong>200</strong> <code>{ code, description, category, mappings[] }</code> &nbsp; <strong>404</strong> codice non trovato</div>
-            </div>
-          </div>
-
-          <div class="api-ep-card" id="ep5">
-            <div class="api-ep-header">
-              <span class="api-method get">GET</span>
-              <code class="api-ep-path">/api/v1/icd10/{code}/to-icd9</code>
-              <button class="api-try-btn" onclick="tryApi('/api/v1/icd10/I21.0/to-icd9','ep5')">&#x25B6; Prova</button>
-            </div>
-            <div class="api-ep-body">
-              <div class="desc">Converte un codice ICD-10-IM nei corrispondenti codici ICD-9.</div>
-              <div class="api-param-row" style="margin-top:.4rem">
-                <span class="api-param-name">code</span><span class="api-param-badge">path</span>
-                <span>codice ICD-10-IM da convertire</span>
-              </div>
-              <div class="api-resp-schema"><strong>200</strong> <code>{ source: {...}, mappings: [{...}] }</code></div>
-            </div>
-          </div>
-
-          <div class="api-ep-card" id="ep6">
-            <div class="api-ep-header">
-              <span class="api-method get">GET</span>
-              <code class="api-ep-path">/api/v1/icd10</code>
-              <button class="api-try-btn" onclick="tryApi('/api/v1/icd10?page=1&amp;limit=5','ep6')">&#x25B6; Prova</button>
-            </div>
-            <div class="api-ep-body">
-              <div class="desc">Lista paginata di tutti i codici ICD-10-IM.</div>
-              <div class="api-param-row" style="margin-top:.4rem">
-                <span class="api-param-name">page</span><span class="api-param-badge">query</span><span>numero pagina (default 1)</span>
-              </div>
-              <div class="api-param-row">
-                <span class="api-param-name">limit</span><span class="api-param-badge">query</span><span>risultati per pagina (default 20, max 200)</span>
-              </div>
-              <div class="api-param-row">
-                <span class="api-param-name">category</span><span class="api-param-badge">query</span><span>filtro per capitolo (facoltativo)</span>
-              </div>
-              <div class="api-resp-schema"><strong>200</strong> <code>{ total, page, limit, items: [{...}] }</code></div>
-            </div>
-          </div>
-
-          <div class="api-section-title">Ricerca &amp; Inferenza</div>
-
-          <div class="api-ep-card" id="ep7">
-            <div class="api-ep-header">
-              <span class="api-method get">GET</span>
-              <code class="api-ep-path">/api/v1/search</code>
-              <button class="api-try-btn" onclick="tryApi('/api/v1/search?q=infarto&amp;version=icd9','ep7')">&#x25B6; Prova</button>
-            </div>
-            <div class="api-ep-body">
-              <div class="desc">Ricerca full-text nelle descrizioni ICD-9 e/o ICD-10-IM.</div>
-              <div class="api-param-row" style="margin-top:.4rem">
-                <span class="api-param-name">q</span><span class="api-param-badge">query · obbligatorio</span><span>testo da cercare</span>
-              </div>
-              <div class="api-param-row">
-                <span class="api-param-name">version</span><span class="api-param-badge">query</span><span><code>icd9</code> | <code>icd10</code> | <code>both</code> (default)</span>
-              </div>
-              <div class="api-resp-schema"><strong>200</strong> <code>{ query, icd9_results: [{code, description, score}], icd10_results: [...] }</code></div>
-            </div>
-          </div>
-
-          <div class="api-ep-card" id="ep8">
-            <div class="api-ep-header">
-              <span class="api-method post">POST</span>
-              <code class="api-ep-path">/api/v1/infer</code>
-              <button class="api-try-btn" onclick="tryApiPost('ep8')">&#x25B6; Prova</button>
-            </div>
-            <div class="api-ep-body">
-              <div class="desc">Inferenza LLM: suggerisce codici ICD da descrizioni cliniche in linguaggio libero.</div>
-              <div style="margin-top:.45rem">
-                <div style="font-size:.76rem;font-weight:600;color:#718096;margin-bottom:.25rem">BODY JSON</div>
-                <pre style="background:#f1f5f9;border-radius:5px;padding:.5rem .7rem;font-size:.76rem;overflow-x:auto;margin:0">{
-  &quot;descriptions&quot;: [&quot;infarto miocardico acuto anteriore&quot;],
-  &quot;version&quot;: &quot;both&quot;,
-  &quot;max_results&quot;: 5
-}</pre>
-              </div>
-              <div class="api-param-row" style="margin-top:.45rem">
-                <span class="api-param-name">descriptions</span><span class="api-param-badge">obbligatorio</span><span>array di stringhe cliniche</span>
-              </div>
-              <div class="api-param-row">
-                <span class="api-param-name">version</span><span class="api-param-badge">opzionale</span><span><code>icd9</code> | <code>icd10</code> | <code>both</code></span>
-              </div>
-              <div class="api-param-row">
-                <span class="api-param-name">max_results</span><span class="api-param-badge">opzionale</span><span>intero (default 5)</span>
-              </div>
-              <div class="api-resp-schema"><strong>200</strong> <code>{ descriptions, icd9_suggestions: [{code, description, confidence, rationale}], icd10_suggestions: [...], mode, model }</code></div>
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-      <!-- RIGHT: sticky response pane -->
-      <div>
-        <div class="card api-response-card">
-          <div id="api-response-pane">
-            <div class="api-placeholder">
-              <div style="font-size:2.2rem;line-height:1">&#x1F4E1;</div>
-              <div>Clicca <strong>&#x25B6; Prova</strong><br>su un endpoint per vedere<br>la risposta qui</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-    </div>
   </div>
 
   <!-- PANEL: INFO -->
@@ -620,7 +618,7 @@
         Tutti i dati ICD utilizzati in questa applicazione provengono da fonti ufficiali del <strong>Ministero della Salute italiano</strong>
         e dell'<strong>Organizzazione Mondiale della Sanità (OMS)</strong>.
       </p>
-
+  
       <h3 style="font-size:.95rem;color:#1a56db;margin:.8rem 0 .4rem">ICD-9-CM — Classificazione Internazionale delle Malattie, 9ª revisione, Modificazione Clinica</h3>
       <div class="icd-card">
         <div class="code">Diagnosi ICD-9-CM</div>
@@ -641,7 +639,7 @@
         <span class="badge">4.460 codici</span>
         <span class="badge">Italiano</span>
       </div>
-
+  
       <h3 style="font-size:.95rem;color:#1a56db;margin:.8rem 0 .4rem">ICD-10-IM — Classificazione Internazionale delle Malattie, 10ª revisione, versione Italiana per uso del Ministero della Salute</h3>
       <div class="icd-card">
         <div class="code">Elenco Sistematico ICD-10-IM v.GAMMA 2.1</div>
@@ -662,7 +660,7 @@
         <span class="badge">18.189 mappature</span>
         <span class="badge">Dicembre 2025</span>
       </div>
-
+  
       <h3 style="font-size:.95rem;color:#1a56db;margin:.8rem 0 .4rem">Nota sull'utilizzo ufficiale</h3>
       <div class="icd-card" style="background:#fffbeb;border-color:#fcd34d">
         <div class="desc">
@@ -674,7 +672,7 @@
           Riferimento: <a href="https://www.salute.gov.it/new/it/tema/assistenza-ospedaliera-sdo/la-classificazione-delle-diagnosi-icd-10-im/" target="_blank" style="color:#1a56db">Ministero della Salute — ICD-10-IM</a>
         </div>
       </div>
-
+  
       <h3 style="font-size:.95rem;color:#1a56db;margin:.8rem 0 .4rem">Licenza</h3>
       <div class="icd-card">
         <div class="desc">
@@ -685,7 +683,7 @@
       </div>
     </div>
   </div>
-
+  
   <!-- PANEL: LIST -->
   <div class="panel" id="panel-list">
     <div class="card">
@@ -745,7 +743,7 @@ const BASE = '/api/v1';
 /* ── TAB SWITCHING ─────────────────────────────────────────── */
 function switchTab(name) {
   document.querySelectorAll('.tab-btn').forEach((b,i) => {
-    const panels = ['convert','search','infer','list','info','api'];
+    const panels = ['convert','search','infer','list','info'];
     b.classList.toggle('active', panels[i] === name);
   });
   document.querySelectorAll('.panel').forEach(p => {
@@ -765,16 +763,34 @@ function renderJSON(data) {
   return JSON.stringify(data, null, 2);
 }
 
-function entryHtml(e, confidence, rationale) {
+function entryHtml(e, confidence, rationale, version) {
   const conf = confidence !== undefined
     ? `<span class="confidence">Conf. ${(confidence*100).toFixed(0)}%</span>` : '';
   const rat  = rationale ? `<div class="rationale">${escHtml(rationale)}</div>` : '';
+
+  let expandHtml = '';
+  if (version) {
+    const isParent = !e.code.includes('.');
+    const expandCode = isParent ? e.code : e.code.substring(0, e.code.lastIndexOf('.'));
+    const expandLabel = isParent
+      ? '&#x25B6; espandi sottocategorie'
+      : `${escHtml(expandCode)} &#x25B6; espandi categoria`;
+    expandHtml = `<div class="expand-trigger-row">
+      <button class="expand-parent-btn"
+        data-version="${escHtml(version)}"
+        data-parent="${escHtml(expandCode)}"
+        onclick="expandParent(this)">${expandLabel}</button>
+    </div>
+    <div class="expand-children-container" style="display:none"></div>`;
+  }
+
   return `<div class="icd-card">
     ${conf}
     <div class="code">${escHtml(e.code)}</div>
     <div class="desc">${escHtml(e.description)}</div>
     <span class="badge">${escHtml(e.category)}</span>
     ${rat}
+    ${expandHtml}
   </div>`;
 }
 
@@ -785,11 +801,11 @@ function escHtml(s) {
 function twoColResults(icd9, icd10, container) {
   let html = '<div class="result-grid">';
   html += `<div class="result-section"><h3>ICD-9 (${icd9.length} risultati)</h3>`;
-  if (icd9.length) icd9.forEach(r => html += entryHtml(r, r.confidence, r.rationale));
+  if (icd9.length) icd9.forEach(r => html += entryHtml(r, r.confidence, r.rationale, 'icd9'));
   else html += '<p style="color:#718096;font-size:.85rem">Nessun risultato.</p>';
   html += '</div>';
   html += `<div class="result-section"><h3>ICD-10 (${icd10.length} risultati)</h3>`;
-  if (icd10.length) icd10.forEach(r => html += entryHtml(r, r.confidence, r.rationale));
+  if (icd10.length) icd10.forEach(r => html += entryHtml(r, r.confidence, r.rationale, 'icd10'));
   else html += '<p style="color:#718096;font-size:.85rem">Nessun risultato.</p>';
   html += '</div></div>';
   document.getElementById(container).innerHTML = html;
@@ -838,6 +854,83 @@ function setSearch(q) {
   doSearch();
 }
 
+function searchEntryHtml(e, maxScore, version) {
+  const isParent = !e.code.includes('.');
+
+  // Parent-desc prefix is prepended by backend only for ICD-9 child codes
+  let descHtml;
+  const sepIdx = (version === 'icd9' && !isParent) ? e.description.indexOf(': ') : -1;
+  if (sepIdx !== -1) {
+    const pPart = e.description.substring(0, sepIdx);
+    const cPart = e.description.substring(sepIdx + 2);
+    descHtml = `<span class="desc-parent-part">${escHtml(pPart)}</span>`
+             + `<span class="desc-sep">›</span>`
+             + `<span class="desc-child-part">${escHtml(cPart)}</span>`;
+  } else {
+    descHtml = `<span class="desc-child-part">${escHtml(e.description)}</span>`;
+  }
+
+  let scoreHtml = '';
+  if (e.score !== undefined && maxScore > 0) {
+    const pct = Math.round((e.score / maxScore) * 100);
+    const cls = pct >= 70 ? 'score-high' : pct >= 40 ? 'score-med' : 'score-low';
+    scoreHtml = `<span class="score-pill ${cls}">${pct}% corr.</span>`;
+  }
+
+  const parentPill = isParent ? '<span class="parent-pill">categoria</span>' : '';
+  const expandCode = isParent ? e.code : e.code.substring(0, e.code.lastIndexOf('.'));
+  const expandLabel = isParent
+    ? '&#x25B6; espandi sottocategorie'
+    : `${escHtml(expandCode)} &#x25B6; espandi categoria`;
+
+  return `<div class="search-card${isParent ? ' is-parent' : ''}">
+    <div class="search-card-header">
+      <span class="search-code">${escHtml(e.code)}</span>
+      ${parentPill}
+    </div>
+    <div class="search-desc">${descHtml}</div>
+    <div class="search-meta">
+      <span class="search-category-tag">${escHtml(e.category)}</span>
+      ${scoreHtml}
+    </div>
+    <div class="expand-trigger-row">
+      <button class="expand-parent-btn"
+        data-version="${escHtml(version)}"
+        data-parent="${escHtml(expandCode)}"
+        onclick="expandParent(this)">${expandLabel}</button>
+    </div>
+    <div class="expand-children-container" style="display:none"></div>
+  </div>`;
+}
+
+function renderSearchResults(icd9, icd10, container) {
+  const maxScore9  = icd9.reduce((m, r) => Math.max(m, r.score ?? 0), 0);
+  const maxScore10 = icd10.reduce((m, r) => Math.max(m, r.score ?? 0), 0);
+
+  let html = '<div class="search-results-grid">';
+
+  html += `<div class="search-section">
+    <div class="search-section-header">
+      <span class="search-section-title">ICD-9-CM</span>
+      <span class="search-count-badge">${icd9.length} risultati</span>
+    </div>`;
+  if (icd9.length) icd9.forEach(r => html += searchEntryHtml(r, maxScore9, 'icd9'));
+  else html += '<p style="color:#718096;font-size:.85rem;padding:.5rem 0">Nessun risultato.</p>';
+  html += '</div>';
+
+  html += `<div class="search-section">
+    <div class="search-section-header">
+      <span class="search-section-title">ICD-10-IM</span>
+      <span class="search-count-badge">${icd10.length} risultati</span>
+    </div>`;
+  if (icd10.length) icd10.forEach(r => html += searchEntryHtml(r, maxScore10, 'icd10'));
+  else html += '<p style="color:#718096;font-size:.85rem;padding:.5rem 0">Nessun risultato.</p>';
+  html += '</div>';
+
+  html += '</div>';
+  document.getElementById(container).innerHTML = html;
+}
+
 async function doSearch() {
   const q   = document.getElementById('search-q').value.trim();
   const ver = document.getElementById('search-ver').value;
@@ -847,40 +940,122 @@ async function doSearch() {
   out.innerHTML = '<p style="color:#718096">Ricerca…</p>';
   try {
     const data = await apiFetch(`${BASE}/search?q=${encodeURIComponent(q)}&version=${ver}`);
-    twoColResults(data.icd9_results || [], data.icd10_results || [], 'result-search');
+    renderSearchResults(data.icd9_results || [], data.icd10_results || [], 'result-search');
   } catch(e) {
     out.innerHTML = `<p style="color:#e53e3e">${escHtml(e.message)}</p>`;
   }
 }
 
-/* ── INFER ─────────────────────────────────────────────────── */
-function setInfer(text) {
-  document.getElementById('infer-desc').value = text;
+/* ── EXPAND PARENT ─────────────────────────────────────────── */
+function childOnlyDesc(desc) {
+  const idx = desc.indexOf(': ');
+  return idx !== -1 ? desc.substring(idx + 2) : desc;
+}
+
+async function expandParent(btn) {
+  const card = btn.closest('.search-card, .icd-card');
+  const container = card.querySelector('.expand-children-container');
+  const version = btn.dataset.version;
+  const parentCode = btn.dataset.parent;
+
+  // Toggle off
+  if (container.style.display !== 'none') {
+    container.style.display = 'none';
+    btn.classList.remove('open');
+    btn.innerHTML = btn.dataset.origLabel;
+    return;
+  }
+
+  // Show cached result
+  if (btn.dataset.loaded === '1') {
+    container.style.display = 'block';
+    btn.classList.add('open');
+    btn.innerHTML = (btn.dataset.origLabel || '').replace('&#x25B6;', '&#x25BC;');
+    return;
+  }
+
+  // First load
+  btn.dataset.origLabel = btn.innerHTML;
+  btn.classList.add('open');
+  btn.textContent = 'Caricamento…';
+  container.innerHTML = '<p class="expand-loading">Caricamento…</p>';
+  container.style.display = 'block';
+
+  try {
+    const data = await apiFetch(`${BASE}/${version}/${encodeURIComponent(parentCode)}/expand`);
+
+    let html = `<div class="expand-panel-header">
+      <span class="expand-panel-parent-code">${escHtml(data.parent.code)}</span>
+      <span class="expand-panel-parent-desc">${escHtml(data.parent.description)}</span>
+      <span class="search-count-badge">${data.children.length} sottocategorie</span>
+    </div>`;
+
+    if (data.children.length === 0) {
+      html += '<p style="color:#718096;font-size:.8rem">Nessuna sottocategoria disponibile.</p>';
+    } else {
+      data.children.forEach(c => {
+        const displayDesc = version === 'icd9' ? childOnlyDesc(c.description) : c.description;
+        html += `<div class="expand-child-row">
+          <span class="expand-child-code">${escHtml(c.code)}</span>
+          <span class="expand-child-desc-text">${escHtml(displayDesc)}</span>
+        </div>`;
+      });
+    }
+
+    container.innerHTML = html;
+    btn.dataset.loaded = '1';
+    btn.innerHTML = (btn.dataset.origLabel).replace('&#x25B6;', '&#x25BC;');
+  } catch(err) {
+    container.innerHTML = `<p style="color:#e53e3e;font-size:.8rem">${escHtml(err.message)}</p>`;
+    btn.classList.remove('open');
+    btn.innerHTML = btn.dataset.origLabel;
+  }
+}
+
+/* ── SEMANTIC SEARCH ───────────────────────────────────────────── */
+function setSemantic(q) {
+  document.getElementById('sem-q').value = q;
   switchTab('infer');
-  doInfer();
+  doSemanticSearch();
+}
+
+async function doSemanticSearch() {
+  const q     = document.getElementById('sem-q').value.trim();
+  const ver   = document.getElementById('sem-ver').value;
+  const limit = document.getElementById('sem-limit').value;
+  const out   = document.getElementById('result-infer');
+  if (!q) { out.innerHTML = '<p style="color:#e53e3e">Inserisci un testo.</p>'; return; }
+
+  out.innerHTML = '<p style="color:#718096">Ricerca semantica in corso…</p>';
+  try {
+    const mode  = document.getElementById('sem-mode').value;
+    const data = await apiFetch(`${BASE}/search/semantic`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ q, version: ver, limit: parseInt(limit, 10), mode })
+    });
+    const modeLabel = data.model === 'heuristic' ? 'euristica' : `embedding · modello: <strong>${escHtml(data.model)}</strong>`;
+    out.innerHTML = `<div class="card" style="padding:.6rem 1rem;margin-bottom:.75rem">
+      <small style="color:#718096">Modalità: <strong>${modeLabel}</strong> · query: <em>${escHtml(data.query)}</em></small>
+    </div><div id="result-infer-grid"></div>`;
+    renderSearchResults(data.icd9_results || [], data.icd10_results || [], 'result-infer-grid');
+  } catch(e) {
+    const hint = e.message.includes('not available')
+      ? `<br><small style="color:#718096">Configura <code>LLM_EMBED_MODEL</code> (es. <code>LLM_EMBED_MODEL=nomic-embed-text</code> con Ollama) per abilitare la ricerca semantica.</small>`
+      : '';
+    out.innerHTML = `<p style="color:#e53e3e">${escHtml(e.message)}${hint}</p>`;
+  }
+}
+
+/* ── INFER (legacy, accessible via API panel) ───────────────────────── */
+function setInfer(text) {
+  document.getElementById('sem-q').value = text;
+  switchTab('infer');
+  doSemanticSearch();
 }
 
 async function doInfer() {
-  const raw  = document.getElementById('infer-desc').value;
-  const maxR = parseInt(document.getElementById('infer-max').value) || 5;
-  const out  = document.getElementById('result-infer');
-  const descs = raw.split('\n').map(s => s.trim()).filter(Boolean);
-  if (!descs.length) { out.innerHTML = '<p style="color:#e53e3e">Inserisci almeno una descrizione.</p>'; return; }
-
-  out.innerHTML = '<p style="color:#718096">Analisi in corso…</p>';
-  try {
-    const data = await apiFetch(`${BASE}/infer`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ descriptions: descs, max_results: maxR })
-    });
-    out.innerHTML = `<div class="card" style="margin-bottom:.5rem">
-      <small style="color:#718096">Modalità: <strong>${escHtml(data.mode)}</strong>${data.model ? ' · Modello: <strong>' + escHtml(data.model) + '</strong>' : ''}</small>
-    </div><div id="result-infer-grid"></div>`;
-    twoColResults(data.icd9_suggestions||[], data.icd10_suggestions||[], 'result-infer-grid');
-  } catch(e) {
-    out.innerHTML = `<p style="color:#e53e3e">${escHtml(e.message)}</p>`;
-  }
+  return doSemanticSearch();
 }
 
 /* ── LIST ──────────────────────────────────────────────────── */
@@ -928,6 +1103,7 @@ document.addEventListener('keydown', e => {
     if (!active) return;
     if (active.id === 'panel-convert') doConvert();
     if (active.id === 'panel-search')  doSearch();
+    if (active.id === 'panel-infer')   doSemanticSearch();
   }
 });
 
@@ -974,9 +1150,9 @@ async function tryApi(url, cardId) {
   } catch(e) { _apiSetError('GET', url, e.message); }
 }
 
-async function tryApiPost(cardId) {
-  const url = '/api/v1/infer';
-  const body = { descriptions: ['infarto miocardico acuto anteriore'], version: 'both', max_results: 3 };
+async function tryApiPostSemantic(cardId) {
+  const url = '/api/v1/search/semantic';
+  const body = { q: 'paziente con dolore toracico, elevazione ST, infarto miocardico anteriore', version: 'both', limit: 5 };
   _apiSetActive(cardId);
   _apiSetLoading('POST', url);
   try {

@@ -1,0 +1,548 @@
+openapi: 3.0.3
+info:
+  title: ICD Converter API
+  version: "1.0.0"
+  description: >
+    API per la conversione e ricerca di codici ICD-9-CM ↔ ICD-10-IM (nomenclatura italiana). Supporta lookup puntuale, conversione bidirezionale, espansione gerarchica, ricerca testuale full-text e ricerca per similarità semantica (embedding vettoriale o euristica).
+
+servers:
+- url: /api/v1
+  description: ICD Converter
+
+tags:
+- name: ICD-9-CM
+  description: Lookup, conversione ed esplorazione dei codici diagnostici ICD-9-CM
+- name: ICD-10-IM
+  description: Lookup, conversione ed esplorazione dei codici diagnostici ICD-10-IM
+- name: Ricerca
+  description: Ricerca full-text e similarità semantica
+
+paths:
+
+  # ── ICD-9-CM ──────────────────────────────────────────────────────────────
+
+  /icd9/{code}:
+    get:
+      tags: [ ICD-9-CM ]
+      summary: Recupera un codice ICD-9
+      description: Restituisce la voce ICD-9-CM corrispondente al codice specificato.
+      operationId: getICD9
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+          example: "410.1"
+        description: Codice ICD-9-CM (es. `410.1`, `250.00`)
+      responses:
+        "200":
+          description: Voce trovata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ICDEntry"
+              example:
+                code: "410.1"
+                description: "Infarto miocardico acuto della parete anteriore"
+                category: "Malattie del sistema circolatorio"
+                mappings: [ "I21.0", "I21.09" ]
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /icd9/{code}/to-icd10:
+    get:
+      tags: [ ICD-9-CM ]
+      summary: Converti ICD-9 → ICD-10
+      description: Converte un codice ICD-9-CM nei relativi codici ICD-10-IM.
+      operationId: icd9ToIcd10
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+          example: "410.1"
+        description: Codice ICD-9-CM da convertire
+      responses:
+        "200":
+          description: Conversione effettuata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversionResponse"
+              example:
+                source:
+                  code: "410.1"
+                  description: "Infarto miocardico acuto della parete anteriore"
+                  category: "Malattie del sistema circolatorio"
+                  mappings: [ "I21.0", "I21.09" ]
+                mappings:
+                - code: "I21.0"
+                  description: "Infarto miocardico acuto transmuratico della parete anteriore"
+                  category: "Malattie del sistema circolatorio"
+                  mappings: [ "410.1" ]
+                - code: "I21.09"
+                  description: "Infarto miocardico acuto transmuratico di altra sede della parete anteriore"
+                  category: "Malattie del sistema circolatorio"
+                  mappings: [ "410.1" ]
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /icd9/{code}/expand:
+    get:
+      tags: [ ICD-9-CM ]
+      summary: Espandi codice padre ICD-9
+      description: >
+        Restituisce il codice ICD-9 padre insieme a tutti i suoi codici figli (tutti i codici della forma `{code}.xxx`). Utile per esplorare la gerarchia.
+      operationId: expandICD9
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+          example: "410"
+        description: Codice padre ICD-9-CM (es. `410` per ottenere `410.0`, `410.1`, …)
+      responses:
+        "200":
+          description: Espansione effettuata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpandResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /icd9:
+    get:
+      tags: [ ICD-9-CM ]
+      summary: Lista codici ICD-9 (paginata)
+      description: Restituisce una lista paginata di tutti i codici ICD-9-CM, con filtro opzionale per categoria.
+      operationId: listICD9
+      parameters:
+      - $ref: "#/components/parameters/page"
+      - $ref: "#/components/parameters/limit"
+      - $ref: "#/components/parameters/category"
+      responses:
+        "200":
+          description: Lista paginata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedResponse"
+
+  # ── ICD-10-IM ─────────────────────────────────────────────────────────────
+
+  /icd10/{code}:
+    get:
+      tags: [ ICD-10-IM ]
+      summary: Recupera un codice ICD-10
+      description: Restituisce la voce ICD-10-IM corrispondente al codice specificato.
+      operationId: getICD10
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+          example: "I21.0"
+        description: Codice ICD-10-IM (es. `I21.0`, `E11.9`)
+      responses:
+        "200":
+          description: Voce trovata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ICDEntry"
+              example:
+                code: "I21.0"
+                description: "Infarto miocardico acuto transmuratico della parete anteriore"
+                category: "Malattie del sistema circolatorio"
+                mappings: [ "410.1" ]
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /icd10/{code}/to-icd9:
+    get:
+      tags: [ ICD-10-IM ]
+      summary: Converti ICD-10 → ICD-9
+      description: Converte un codice ICD-10-IM nei relativi codici ICD-9-CM.
+      operationId: icd10ToIcd9
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+          example: "I21.0"
+        description: Codice ICD-10-IM da convertire
+      responses:
+        "200":
+          description: Conversione effettuata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversionResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /icd10/{code}/expand:
+    get:
+      tags: [ ICD-10-IM ]
+      summary: Espandi codice padre ICD-10
+      description: >
+        Restituisce il codice ICD-10-IM padre insieme a tutti i suoi codici figli. Utile per esplorare la gerarchia (es. `I21` → `I21.0`, `I21.1`, `I21.2`, …).
+      operationId: expandICD10
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+          example: "I21"
+        description: Codice padre ICD-10-IM
+      responses:
+        "200":
+          description: Espansione effettuata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpandResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /icd10:
+    get:
+      tags: [ ICD-10-IM ]
+      summary: Lista codici ICD-10 (paginata)
+      description: Restituisce una lista paginata di tutti i codici ICD-10-IM, con filtro opzionale per categoria.
+      operationId: listICD10
+      parameters:
+      - $ref: "#/components/parameters/page"
+      - $ref: "#/components/parameters/limit"
+      - $ref: "#/components/parameters/category"
+      responses:
+        "200":
+          description: Lista paginata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedResponse"
+
+  # ── Ricerca ───────────────────────────────────────────────────────────────
+
+  /search:
+    get:
+      tags: [ Ricerca ]
+      summary: Ricerca full-text
+      description: >
+        Ricerca per parola chiave nelle descrizioni ICD-9-CM e/o ICD-10-IM. I risultati sono ordinati per punteggio di rilevanza.
+      operationId: search
+      parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+          example: "infarto miocardico"
+        description: Testo da cercare nelle descrizioni
+      - name: version
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [ icd9, icd10, both ]
+          default: both
+        description: "Versione ICD su cui cercare: `icd9`, `icd10` o `both` (default)"
+      responses:
+        "200":
+          description: Risultati della ricerca
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+              example:
+                query: "infarto miocardico"
+                icd9_results:
+                - code: "410.1"
+                  description: "Infarto miocardico acuto della parete anteriore"
+                  category: "Malattie del sistema circolatorio"
+                  mappings: [ "I21.0" ]
+                  score: 1.0
+                icd10_results:
+                - code: "I21.0"
+                  description: "Infarto miocardico acuto transmuratico della parete anteriore"
+                  category: "Malattie del sistema circolatorio"
+                  mappings: [ "410.1" ]
+                  score: 1.0
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /search/semantic:
+    post:
+      tags: [ Ricerca ]
+      summary: Ricerca per similarità semantica
+      description: >
+        Ordina i codici ICD per similarità semantica rispetto al testo clinico fornito. Usa embedding vettoriale (cosine similarity) se il modello è configurato, altrimenti cade in modalità euristica (keyword scoring).
+
+
+        Il campo `mode` permette di forzare la modalità:
+
+        - `auto` *(default)*: usa embedding se disponibile, altrimenti euristica
+
+        - `embedding`: richiede l'embedding — restituisce **503** se non configurato
+
+        - `heuristic`: forza sempre la ricerca keyword
+      operationId: semanticSearch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SemanticSearchRequest"
+            examples:
+              infarto:
+                summary: Dolore toracico / infarto
+                value:
+                  q: "Paziente con dolore toracico oppressivo, irradiazione al braccio sinistro, sudorazione profusa e nausea. ECG con sopraslivellamento ST in V1-V4. Diagnosi di STEMI anteriore."
+                  version: both
+                  limit: 5
+                  mode: auto
+              diabete:
+                summary: Diabete con complicanze
+                value:
+                  q: "Diabete mellito tipo 2 con polineuropatia periferica, ulcera al piede e insufficienza renale cronica stadio 3."
+                  version: icd10
+                  limit: 10
+                  mode: auto
+              ictus:
+                summary: Ictus ischemico
+                value:
+                  q: "Paziente con emiplegia destra a insorgenza acuta, afasia, TC cerebrale con area ipodensa in territorio ACM sinistra. Ictus ischemico."
+                  version: both
+                  limit: 8
+                  mode: heuristic
+      responses:
+        "200":
+          description: Risultati ordinati per similarità
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SemanticSearchResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "503":
+          description: Embedding non disponibile (solo con `mode=embedding`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: "embedding index not available; set LLM_EMBED_MODEL or use mode=heuristic"
+
+# ── Components ────────────────────────────────────────────────────────────────
+
+components:
+
+  schemas:
+
+    ICDEntry:
+      type: object
+      description: Voce ICD con codice, descrizione, categoria e mappings cross-version
+      properties:
+        code:
+          type: string
+          description: Codice ICD (es. `410.1` per ICD-9, `I21.0` per ICD-10)
+          example: "410.1"
+        description:
+          type: string
+          description: Descrizione clinica del codice
+          example: "Infarto miocardico acuto della parete anteriore"
+        category:
+          type: string
+          description: Capitolo/categoria di appartenenza
+          example: "Malattie del sistema circolatorio"
+        mappings:
+          type: array
+          description: Codici equivalenti nell'altra versione ICD
+          items:
+            type: string
+          example: [ "I21.0", "I21.09" ]
+
+    SearchResult:
+      allOf:
+      - $ref: "#/components/schemas/ICDEntry"
+      - type: object
+        properties:
+          score:
+            type: number
+            format: float
+            description: Punteggio di rilevanza (0–1, più alto = più rilevante)
+            example: 0.87
+
+    ConversionResponse:
+      type: object
+      description: Risultato di una conversione ICD-9 ↔ ICD-10
+      properties:
+        source:
+          $ref: "#/components/schemas/ICDEntry"
+        mappings:
+          type: array
+          description: Codici equivalenti nella versione di destinazione
+          items:
+            $ref: "#/components/schemas/ICDEntry"
+
+    ExpandResponse:
+      type: object
+      description: Codice padre con tutti i suoi codici figli (espansione gerarchica)
+      properties:
+        parent:
+          $ref: "#/components/schemas/ICDEntry"
+        children:
+          type: array
+          description: Sottocodici del codice padre
+          items:
+            $ref: "#/components/schemas/ICDEntry"
+
+    PaginatedResponse:
+      type: object
+      description: Lista paginata di codici ICD
+      properties:
+        total:
+          type: integer
+          description: Numero totale di voci (prima della paginazione)
+          example: 16234
+        page:
+          type: integer
+          description: Numero di pagina corrente
+          example: 1
+        limit:
+          type: integer
+          description: Risultati per pagina
+          example: 20
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ICDEntry"
+
+    SearchResponse:
+      type: object
+      description: Risultati della ricerca full-text
+      properties:
+        query:
+          type: string
+          description: Query immessa dall'utente
+        icd9_results:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchResult"
+        icd10_results:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchResult"
+
+    SemanticSearchRequest:
+      type: object
+      required: [ q ]
+      properties:
+        q:
+          type: string
+          description: Testo clinico libero da usare come query
+          example: "Paziente con dolore toracico, elevazione ST, infarto anteriore"
+        version:
+          type: string
+          enum: [ icd9, icd10, both ]
+          default: both
+          description: "Versione ICD su cui cercare: `icd9`, `icd10` o `both`"
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 10
+          description: Numero massimo di risultati per versione
+        mode:
+          type: string
+          enum: [ auto, embedding, heuristic ]
+          default: auto
+          description: >
+            Modalità di ricerca: `auto` (embedding se disponibile, sennò euristica), `embedding` (solo vettoriale, errore 503 se non configurato), `heuristic` (solo keyword scoring)
+
+    SemanticSearchResponse:
+      type: object
+      description: Risultati della ricerca semantica
+      properties:
+        query:
+          type: string
+          description: Query immessa dall'utente
+        icd9_results:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchResult"
+        icd10_results:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchResult"
+        model:
+          type: string
+          description: Modello di embedding usato, oppure `heuristic` se nessun modello è configurato
+          example: "nomic-embed-text"
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Messaggio di errore
+          example: "ICD-9 code not found: 999.9"
+
+  responses:
+
+    NotFound:
+      description: Codice ICD non trovato
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: "ICD-9 code not found: 999.9"
+
+    BadRequest:
+      description: Richiesta non valida (parametro mancante o malformato)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: "query parameter 'q' is required"
+
+  parameters:
+
+    page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      description: Numero di pagina (1-based)
+
+    limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 20
+      description: Risultati per pagina (max 200)
+
+    category:
+      name: category
+      in: query
+      required: false
+      schema:
+        type: string
+      description: 'Filtra per categoria/capitolo (es. "Malattie del sistema circolatorio")'

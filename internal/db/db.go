@@ -54,11 +54,22 @@ CREATE TABLE IF NOT EXISTS icd_mappings (
     UNIQUE(version_id, icd9_code, icd10_code)
 );
 
+CREATE TABLE IF NOT EXISTS icd_embeddings (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    version_id INTEGER NOT NULL,
+    icd_type   TEXT    NOT NULL,  -- 'icd9' or 'icd10'
+    code       TEXT    NOT NULL,
+    model      TEXT    NOT NULL,
+    vector     BLOB    NOT NULL,  -- IEEE-754 float32 little-endian
+    UNIQUE(version_id, icd_type, code, model)
+);
+
 CREATE INDEX IF NOT EXISTS idx_icd9d_code  ON icd9_diagnosi(code);
 CREATE INDEX IF NOT EXISTS idx_icd9p_code  ON icd9_procedure(code);
 CREATE INDEX IF NOT EXISTS idx_icd10_code  ON icd10_codes(code);
 CREATE INDEX IF NOT EXISTS idx_map_icd9    ON icd_mappings(icd9_code);
 CREATE INDEX IF NOT EXISTS idx_map_icd10   ON icd_mappings(icd10_code);
+CREATE INDEX IF NOT EXISTS idx_emb_lookup  ON icd_embeddings(version_id, icd_type, model);
 `
 
 // Open opens (or creates) the SQLite database at path and migrates the schema.
@@ -87,4 +98,11 @@ func IsSeeded(db *sql.DB) (bool, error) {
 	var count int
 	err := db.QueryRow(`SELECT COUNT(*) FROM icd_versions WHERE is_active = 1`).Scan(&count)
 	return count > 0, err
+}
+
+// GetActiveVersionID returns the id of the most recent active ICD version.
+func GetActiveVersionID(db *sql.DB) (int64, error) {
+	var id int64
+	err := db.QueryRow(`SELECT id FROM icd_versions WHERE is_active=1 ORDER BY id DESC LIMIT 1`).Scan(&id)
+	return id, err
 }

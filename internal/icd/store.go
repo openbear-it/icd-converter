@@ -98,6 +98,30 @@ func (s *Store) AllICD9() []ICDEntry { return s.icd9List }
 // AllICD10 returns all ICD-10 entries.
 func (s *Store) AllICD10() []ICDEntry { return s.icd10List }
 
+// ChildrenICD9 returns all ICD-9 entries whose code is a direct or indirect
+// child of parentCode (i.e. starts with "parentCode.").
+func (s *Store) ChildrenICD9(parentCode string) []ICDEntry {
+	return childrenOf(s.icd9List, strings.TrimSpace(parentCode))
+}
+
+// ChildrenICD10 returns all ICD-10 entries whose code is a direct or indirect
+// child of parentCode.
+func (s *Store) ChildrenICD10(parentCode string) []ICDEntry {
+	return childrenOf(s.icd10List, strings.TrimSpace(parentCode))
+}
+
+// childrenOf filters a list returning all entries whose code starts with prefix+"."
+func childrenOf(list []ICDEntry, prefix string) []ICDEntry {
+	results := make([]ICDEntry, 0)
+	dotPrefix := prefix + "."
+	for _, e := range list {
+		if strings.HasPrefix(e.Code, dotPrefix) {
+			results = append(results, e)
+		}
+	}
+	return results
+}
+
 // searchEntries scores entries against a multi-word query.
 // Scoring: +2 per token that is a prefix of a description word, +1 per token contained anywhere.
 func searchEntries(entries []ICDEntry, query string) []SearchResult {

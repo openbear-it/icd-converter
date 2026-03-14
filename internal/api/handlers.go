@@ -16,6 +16,12 @@ type ConversionResponse struct {
 	Mappings []icd.ICDEntry `json:"mappings"`
 }
 
+// ExpandResponse is returned when expanding a parent code to show its children.
+type ExpandResponse struct {
+	Parent   icd.ICDEntry   `json:"parent"`
+	Children []icd.ICDEntry `json:"children"`
+}
+
 // SearchResponse is returned for free-text search requests.
 type SearchResponse struct {
 	Query       string             `json:"query"`
@@ -45,18 +51,18 @@ func RegisterRoutes(r *gin.Engine, h *Handler) {
 		// ICD-9 endpoints
 		v1.GET("/icd9/:code", h.GetICD9)
 		v1.GET("/icd9/:code/to-icd10", h.ICD9ToICD10)
+		v1.GET("/icd9/:code/expand", h.ExpandICD9)
 		v1.GET("/icd9", h.ListICD9)
 
 		// ICD-10 endpoints
 		v1.GET("/icd10/:code", h.GetICD10)
 		v1.GET("/icd10/:code/to-icd9", h.ICD10ToICD9)
+		v1.GET("/icd10/:code/expand", h.ExpandICD10)
 		v1.GET("/icd10", h.ListICD10)
 
 		// Bidirectional search
 		v1.GET("/search", h.Search)
-
-		// LLM-based inference
-		v1.POST("/infer", h.Infer)
+		v1.POST("/search/semantic", h.SemanticSearch)
 	}
 }
 
@@ -86,6 +92,21 @@ func (h *Handler) GetICD10(c *gin.Context) {
 	c.JSON(http.StatusOK, entry)
 }
 
+// ExpandICD9 godoc
+// GET /api/v1/icd9/:code/expand
+// Returns the parent ICD-9 entry together with all its children (codes that
+// start with "<code>."). Useful for exploding a category code.
+func (h *Handler) ExpandICD9(c *gin.Context) {
+	code := c.Param("code")
+	parent, ok := h.store.LookupICD9(code)
+	if !ok {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "ICD-9 code not found: " + code})
+		return
+	}
+	children := h.store.ChildrenICD9(code)
+	c.JSON(http.StatusOK, ExpandResponse{Parent: parent, Children: children})
+}
+
 // ICD9ToICD10 godoc
 // GET /api/v1/icd9/:code/to-icd10
 // Converts an ICD-9 code to its ICD-10 equivalents.
@@ -98,6 +119,20 @@ func (h *Handler) ICD9ToICD10(c *gin.Context) {
 	}
 	mappings, _ := h.store.ICD9ToICD10(code)
 	c.JSON(http.StatusOK, ConversionResponse{Source: src, Mappings: mappings})
+}
+
+// ExpandICD10 godoc
+// GET /api/v1/icd10/:code/expand
+// Returns the parent ICD-10 entry together with all its children.
+func (h *Handler) ExpandICD10(c *gin.Context) {
+	code := c.Param("code")
+	parent, ok := h.store.LookupICD10(code)
+	if !ok {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "ICD-10 code not found: " + code})
+		return
+	}
+	children := h.store.ChildrenICD10(code)
+	c.JSON(http.StatusOK, ExpandResponse{Parent: parent, Children: children})
 }
 
 // ICD10ToICD9 godoc

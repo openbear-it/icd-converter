@@ -1,16 +1,18 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"io/fs"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"icd-converter/internal/api"
 	"icd-converter/internal/db"
-	"icd-converter/internal/llm"
+	embedpkg "icd-converter/internal/embed"
 
 	"github.com/gin-gonic/gin"
 )
@@ -23,11 +25,10 @@ var officialDataFS embed.FS
 
 func main() {
 	// ── Configuration from environment ──────────────────────────────────────
-	port := envOr("PORT", "8080")
-	apiKey := os.Getenv("OPENAI_API_KEY")      // leave empty for heuristic mode
-	baseURL := os.Getenv("LLM_BASE_URL")        // override for Ollama / LM Studio
-	model := envOr("LLM_MODEL", "gpt-4o-mini") // model name
+	port   := envOr("PORT", "8080")
 	dbPath := envOr("ICD_DB_PATH", "icd.db")
+	baseURL := os.Getenv("LLM_BASE_URL")
+	apiKey  := os.Getenv("OPENAI_API_KEY")
 
 	// ── Database: open, migrate schema, seed on first run ────────────────────
 	sqldb, err := db.Open(dbPath)
@@ -59,23 +60,34 @@ func main() {
 	log.Printf("ICD store loaded: %d ICD-9 codes, %d ICD-10 codes",
 		len(store.AllICD9()), len(store.AllICD10()))
 
-	// ── LLM Engine ────────────────────────────────────────────────────────────
-	engine := llm.NewEngine(llm.Config{
-		APIKey:         apiKey,
-		BaseURL:        baseURL,
-		Model:          model,
-		TimeoutSeconds: 60,
-	}, store)
-	api.SetLLMEngine(engine)
-
-	mode := "heuristic (no OPENAI_API_KEY set)"
-	if apiKey != "" {
-		mode = "LLM (" + model + ")"
-		if baseURL != "" {
-			mode += " @ " + baseURL
+	// ── Semantic Embedding Search ─────────────────────────────────────────────
+	embedModel := os.Getenv("LLM_EMBED_MODEL")
+	if embedModel != "" {
+		embedBaseURL := envOr("LLM_EMBED_BASE_URL", baseURL)
+		embedAPIKey := envOr("LLM_EMBED_API_KEY", apiKey)
+		builder := embedpkg.NewBuilder(embedpkg.Config{
+			APIKey:  embedAPIKey,
+			BaseURL: embedBaseURL,
+			Model:   embedModel,
+		})
+		versionID, err := db.GetActiveVersionID(sqldb)
+		if err != nil {
+			log.Fatalf("get version id: %v", err)
 		}
+		ctx := context.Background()
+		idx9, err := builder.BuildOrLoad(ctx, sqldb, versionID, "icd9", store.AllICD9())
+		if err != nil {
+			log.Fatalf("embed icd9: %v", err)
+		}
+		idx10, err := builder.BuildOrLoad(ctx, sqldb, versionID, "icd10", store.AllICD10())
+		if err != nil {
+			log.Fatalf("embed icd10: %v", err)
+		}
+		api.SetEmbedder(builder, idx9, idx10)
+		log.Printf("Semantic search ready: model=%s  icd9=%d  icd10=%d vectors", embedModel, idx9.Len(), idx10.Len())
+	} else {
+		log.Printf("Semantic search disabled (set LLM_EMBED_MODEL to enable, e.g. LLM_EMBED_MODEL=all-minilm)")
 	}
-	log.Printf("Inference mode: %s", mode)
 
 	// ── HTTP Router ───────────────────────────────────────────────────────────
 	if os.Getenv("GIN_MODE") == "" {
@@ -118,6 +130,15 @@ func main() {
 func envOr(key, def string) string {
 	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
 		return v
+	}
+	return def
+}
+
+func envOrInt(key string, def int) int {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
 	}
 	return def
 }

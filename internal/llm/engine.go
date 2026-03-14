@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -95,6 +96,8 @@ func (e *Engine) llmInfer(ctx context.Context, req InferRequest) (*InferResponse
 	timeout := time.Duration(e.cfg.TimeoutSeconds) * time.Second
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	start := time.Now()
+	log.Printf("llm: calling model=%q descriptions=%d max_results=%d", e.cfg.Model, len(req.Descriptions), req.MaxResults)
 
 	systemPrompt := `You are a clinical coding assistant specialized in ICD-9-CM and ICD-10-CM coding.
 Given a list of clinical descriptions (diagnoses, procedures, symptoms, etc.), identify the most appropriate ICD-9 and ICD-10 codes.
@@ -142,12 +145,16 @@ Rules:
 		ICD10 []ICDSuggestion `json:"icd10_suggestions"`
 	}
 	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+		log.Printf("llm: ERROR parse model=%q elapsed=%s err=%v", e.cfg.Model, time.Since(start).Round(time.Millisecond), err)
 		return nil, fmt.Errorf("failed to parse LLM response JSON: %w", err)
 	}
 
 	// Clamp to MaxResults
 	parsed.ICD9 = takeN(parsed.ICD9, req.MaxResults)
 	parsed.ICD10 = takeN(parsed.ICD10, req.MaxResults)
+
+	log.Printf("llm: done model=%q icd9=%d icd10=%d elapsed=%s",
+		e.cfg.Model, len(parsed.ICD9), len(parsed.ICD10), time.Since(start).Round(time.Millisecond))
 
 	return &InferResponse{
 		Descriptions: req.Descriptions,
@@ -160,6 +167,8 @@ Rules:
 
 // heuristicInfer uses the keyword search store when no LLM is configured.
 func (e *Engine) heuristicInfer(req InferRequest) (*InferResponse, error) {
+	start := time.Now()
+	log.Printf("llm [heuristic]: keyword search descriptions=%d max_results=%d", len(req.Descriptions), req.MaxResults)
 	combined := strings.Join(req.Descriptions, " ")
 	icd9Results, icd10Results := e.store.SearchAll(combined)
 
@@ -191,10 +200,14 @@ func (e *Engine) heuristicInfer(req InferRequest) (*InferResponse, error) {
 		return out
 	}
 
+	icd9Sugg  := toSuggestions(icd9Results, req.MaxResults)
+	icd10Sugg := toSuggestions(icd10Results, req.MaxResults)
+	log.Printf("llm [heuristic]: done icd9=%d icd10=%d elapsed=%s",
+		len(icd9Sugg), len(icd10Sugg), time.Since(start).Round(time.Millisecond))
 	return &InferResponse{
 		Descriptions: req.Descriptions,
-		ICD9:          toSuggestions(icd9Results, req.MaxResults),
-		ICD10:         toSuggestions(icd10Results, req.MaxResults),
+		ICD9:          icd9Sugg,
+		ICD10:         icd10Sugg,
 		Mode:          "heuristic",
 	}, nil
 }

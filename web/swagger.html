@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ICD Converter – API Reference</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: sans-serif; background: #f8fafc; }
+
+    /* top bar */
+    .topbar-custom {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: .6rem 1.5rem;
+      background: #1e3a5f;
+      color: #fff;
+    }
+    .topbar-custom a {
+      color: #93c5fd;
+      text-decoration: none;
+      font-size: .85rem;
+      border: 1px solid #3b82f6;
+      border-radius: 5px;
+      padding: .25rem .65rem;
+      transition: background .15s;
+    }
+    .topbar-custom a:hover { background: #3b82f6; color: #fff; }
+    .topbar-custom h1 { margin: 0; font-size: 1.05rem; font-weight: 600; letter-spacing: .02em; }
+    .topbar-custom span { font-size: .78rem; opacity: .65; }
+
+    /* hide the default Swagger top bar */
+    .swagger-ui .topbar { display: none !important; }
+
+    #swagger-ui { max-width: 1200px; margin: 0 auto; padding: 1.5rem 1rem; }
+  </style>
+</head>
+<body>
+
+  <div class="topbar-custom">
+    <h1>ICD Converter &ndash; API Reference</h1>
+    <span>ICD-9-CM &harr; ICD-10-IM</span>
+    <a href="/ui/" style="margin-left:auto">← Torna all'app</a>
+  </div>
+
+  <div id="swagger-ui"></div>
+
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
+  <script>
+    window.addEventListener('load', function () {
+      SwaggerUIBundle({
+        url: '/ui/openapi.yaml',
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIStandalonePreset,
+        ],
+        plugins: [
+          SwaggerUIBundle.plugins.DownloadUrl,
+        ],
+        layout: 'StandaloneLayout',
+        tryItOutEnabled: true,
+        requestInterceptor: function (req) {
+          // strip the /api/v1 prefix from the server URL so requests go to
+          // the current host/port automatically
+          return req;
+        },
+      });
+    });
+  </script>
+</body>
+</html>

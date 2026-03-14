@@ -3,6 +3,8 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"strings"
+
 	"icd-converter/internal/icd"
 )
 
@@ -70,24 +72,42 @@ func loadICD9(db *sql.DB, versionID int64, table string, icd9to10 map[string][]s
 	}
 	defer rows.Close()
 
-	var entries []icd.ICDEntry
+	type raw struct{ code, desc string }
+	var raws []raw
+	descByCode := make(map[string]string)
 	for rows.Next() {
 		var code, desc string
 		if err := rows.Scan(&code, &desc); err != nil {
 			continue
 		}
-		mappings := icd9to10[code]
+		raws = append(raws, raw{code, desc})
+		descByCode[code] = desc
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	entries := make([]icd.ICDEntry, 0, len(raws))
+	for _, r := range raws {
+		desc := r.desc
+		if dot := strings.LastIndex(r.code, "."); dot > 0 {
+			parentCode := r.code[:dot]
+			if parentDesc, ok := descByCode[parentCode]; ok {
+				desc = parentDesc + ": " + r.desc
+			}
+		}
+		mappings := icd9to10[r.code]
 		if mappings == nil {
 			mappings = []string{}
 		}
 		entries = append(entries, icd.ICDEntry{
-			Code:        code,
+			Code:        r.code,
 			Description: desc,
-			Category:    icd9Category(code),
+			Category:    icd9Category(r.code),
 			Mappings:    mappings,
 		})
 	}
-	return entries, rows.Err()
+	return entries, nil
 }
 
 func loadICD10(db *sql.DB, versionID int64, icd10to9 map[string][]string) ([]icd.ICDEntry, error) {
