@@ -24,9 +24,10 @@ type ExpandResponse struct {
 
 // SearchResponse is returned for free-text search requests.
 type SearchResponse struct {
-	Query       string             `json:"query"`
-	ICD9Results []icd.SearchResult `json:"icd9_results"`
+	Query        string             `json:"query"`
+	ICD9Results  []icd.SearchResult `json:"icd9_results"`
 	ICD10Results []icd.SearchResult `json:"icd10_results"`
+	CIPIResults  []icd.CIPISearchResult `json:"cipi_results"`
 }
 
 // ErrorResponse wraps an error message for the client.
@@ -59,6 +60,11 @@ func RegisterRoutes(r *gin.Engine, h *Handler) {
 		v1.GET("/icd10/:code/to-icd9", h.ICD10ToICD9)
 		v1.GET("/icd10/:code/expand", h.ExpandICD10)
 		v1.GET("/icd10", h.ListICD10)
+
+		// CIPI endpoints
+		v1.GET("/cipi/:code", h.GetCIPI)
+		v1.GET("/cipi/:code/expand", h.ExpandCIPI)
+		v1.GET("/cipi", h.ListCIPI)
 
 		// Bidirectional search
 		v1.GET("/search", h.Search)
@@ -166,8 +172,10 @@ func (h *Handler) ListICD10(c *gin.Context) {
 }
 
 // Search godoc
-// GET /api/v1/search?q=diabetes&version=both
-// Full-text search across ICD codes. version can be "icd9", "icd10", or "both" (default).
+// GET /api/v1/search?q=diabetes&version=both&cipi_type=
+// Full-text search across ICD and CIPI codes.
+// version: "icd9" | "icd10" | "cipi" | "both" (icd9+icd10, default) | "all"
+// cipi_type: "" (both) | "diagnosi" | "procedura"  — only applied when searching CIPI
 func (h *Handler) Search(c *gin.Context) {
 	q := strings.TrimSpace(c.Query("q"))
 	if q == "" {
@@ -175,6 +183,7 @@ func (h *Handler) Search(c *gin.Context) {
 		return
 	}
 	version := strings.ToLower(c.DefaultQuery("version", "both"))
+	cipiType := strings.ToLower(strings.TrimSpace(c.Query("cipi_type")))
 
 	resp := SearchResponse{Query: q}
 	switch version {
@@ -182,8 +191,22 @@ func (h *Handler) Search(c *gin.Context) {
 		resp.ICD9Results = h.store.SearchICD9(q)
 	case "icd10":
 		resp.ICD10Results = h.store.SearchICD10(q)
-	default:
+	case "cipi":
+		resp.CIPIResults = h.store.SearchCIPI(q, cipiType)
+	case "all":
 		resp.ICD9Results, resp.ICD10Results = h.store.SearchAll(q)
+		resp.CIPIResults = h.store.SearchCIPI(q, cipiType)
+	default: // "both" — ICD-9 + ICD-10 (backward-compatible default)
+		resp.ICD9Results, resp.ICD10Results = h.store.SearchAll(q)
+	}
+	if resp.ICD9Results == nil {
+		resp.ICD9Results = []icd.SearchResult{}
+	}
+	if resp.ICD10Results == nil {
+		resp.ICD10Results = []icd.SearchResult{}
+	}
+	if resp.CIPIResults == nil {
+		resp.CIPIResults = []icd.CIPISearchResult{}
 	}
 	c.JSON(http.StatusOK, resp)
 }
@@ -249,4 +272,76 @@ func clamp(v, lo, hi int) int {
 		return hi
 	}
 	return v
+}
+
+// ── CIPI handlers ─────────────────────────────────────────────────────────────
+
+// CIPIExpandResponse is returned when expanding a CIPI parent code.
+type CIPIExpandResponse struct {
+	Parent   icd.CIPIEntry   `json:"parent"`
+	Children []icd.CIPIEntry `json:"children"`
+}
+
+// GetCIPI godoc
+// GET /api/v1/cipi/:code
+// Returns a single CIPI entry.
+func (h *Handler) GetCIPI(c *gin.Context) {
+	code := c.Param("code")
+	entry, ok := h.store.LookupCIPI(code)
+	if !ok {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "CIPI code not found: " + code})
+		return
+	}
+	c.JSON(http.StatusOK, entry)
+}
+
+// ExpandCIPI godoc
+// GET /api/v1/cipi/:code/expand
+// Returns the parent CIPI entry together with all its direct children.
+func (h *Handler) ExpandCIPI(c *gin.Context) {
+	code := c.Param("code")
+	parent, ok := h.store.LookupCIPI(code)
+	if !ok {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "CIPI code not found: " + code})
+		return
+	}
+	children := h.store.ChildrenCIPI(code)
+	c.JSON(http.StatusOK, CIPIExpandResponse{Parent: parent, Children: children})
+}
+
+// ListCIPI godoc
+// GET /api/v1/cipi?page=1&limit=20&type=procedura
+// Returns a paginated list of CIPI entries, optionally filtered by type.
+func (h *Handler) ListCIPI(c *gin.Context) {
+	all := h.store.AllCIPI()
+	typeFilter := strings.ToLower(strings.TrimSpace(c.Query("type")))
+	if typeFilter != "" {
+		filtered := all[:0:0]
+		for _, e := range all {
+			if e.Type == typeFilter {
+				filtered = append(filtered, e)
+			}
+		}
+		all = filtered
+	}
+
+	page := max(1, queryInt(c, "page", 1))
+	limit := clamp(queryInt(c, "limit", 20), 1, 200)
+	start := (page - 1) * limit
+	end := start + limit
+
+	type cipiPage struct {
+		Total int             `json:"total"`
+		Page  int             `json:"page"`
+		Limit int             `json:"limit"`
+		Items []icd.CIPIEntry `json:"items"`
+	}
+	if start >= len(all) {
+		c.JSON(http.StatusOK, cipiPage{Total: len(all), Page: page, Limit: limit, Items: []icd.CIPIEntry{}})
+		return
+	}
+	if end > len(all) {
+		end = len(all)
+	}
+	c.JSON(http.StatusOK, cipiPage{Total: len(all), Page: page, Limit: limit, Items: all[start:end]})
 }

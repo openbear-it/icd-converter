@@ -10,21 +10,28 @@ type Store struct {
 	icd10ByCode map[string]ICDEntry
 	icd9List    []ICDEntry
 	icd10List   []ICDEntry
+	cipiByCode  map[string]CIPIEntry
+	cipiList    []CIPIEntry
 }
 
 // NewStore builds a Store from pre-loaded slices (e.g. loaded from SQLite).
-func NewStore(icd9 []ICDEntry, icd10 []ICDEntry) *Store {
+func NewStore(icd9 []ICDEntry, icd10 []ICDEntry, cipi []CIPIEntry) *Store {
 	s := &Store{
 		icd9ByCode:  make(map[string]ICDEntry, len(icd9)),
 		icd10ByCode: make(map[string]ICDEntry, len(icd10)),
 		icd9List:    icd9,
 		icd10List:   icd10,
+		cipiByCode:  make(map[string]CIPIEntry, len(cipi)),
+		cipiList:    cipi,
 	}
 	for _, e := range icd9 {
 		s.icd9ByCode[e.Code] = e
 	}
 	for _, e := range icd10 {
 		s.icd10ByCode[e.Code] = e
+	}
+	for _, e := range cipi {
+		s.cipiByCode[e.Code] = e
 	}
 	return s
 }
@@ -97,6 +104,64 @@ func (s *Store) AllICD9() []ICDEntry { return s.icd9List }
 
 // AllICD10 returns all ICD-10 entries.
 func (s *Store) AllICD10() []ICDEntry { return s.icd10List }
+
+// AllCIPI returns all CIPI entries.
+func (s *Store) AllCIPI() []CIPIEntry { return s.cipiList }
+
+// LookupCIPI returns the CIPI entry for a given code (case-insensitive, trimmed).
+func (s *Store) LookupCIPI(code string) (CIPIEntry, bool) {
+	e, ok := s.cipiByCode[strings.TrimSpace(code)]
+	return e, ok
+}
+
+// ChildrenCIPI returns all CIPI entries whose parent equals the given code.
+func (s *Store) ChildrenCIPI(code string) []CIPIEntry {
+	code = strings.TrimSpace(code)
+	var children []CIPIEntry
+	for _, e := range s.cipiList {
+		if e.Parent == code {
+			children = append(children, e)
+		}
+	}
+	if children == nil {
+		children = []CIPIEntry{}
+	}
+	return children
+}
+
+// CIPISearchResult is a CIPI entry with a relevance score.
+type CIPISearchResult struct {
+	CIPIEntry
+	Score float64 `json:"score"`
+}
+
+// SearchCIPI performs a case-insensitive keyword search over CIPI descriptions.
+// An optional cipiType ("diagnosi" | "procedura") restricts the results; pass ""
+// to search all types.
+func (s *Store) SearchCIPI(query, cipiType string) []CIPISearchResult {
+	tokens := tokenize(query)
+	if len(tokens) == 0 {
+		return nil
+	}
+	var results []CIPISearchResult
+	for _, e := range s.cipiList {
+		if cipiType != "" && e.Type != cipiType {
+			continue
+		}
+		desc := strings.ToLower(e.Description)
+		score := scoreEntry(desc, strings.ToLower(e.Code), tokens)
+		if score > 0 {
+			results = append(results, CIPISearchResult{CIPIEntry: e, Score: score})
+		}
+	}
+	// Sort descending by score.
+	for i := 1; i < len(results); i++ {
+		for j := i; j > 0 && results[j].Score > results[j-1].Score; j-- {
+			results[j], results[j-1] = results[j-1], results[j]
+		}
+	}
+	return results
+}
 
 // ChildrenICD9 returns all ICD-9 entries whose code is a direct or indirect
 // child of parentCode (i.e. starts with "parentCode.").

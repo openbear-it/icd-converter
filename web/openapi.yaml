@@ -1,9 +1,9 @@
 openapi: 3.0.3
 info:
   title: ICD Converter API
-  version: "1.0.0"
+  version: "1.1.0"
   description: >
-    API per la conversione e ricerca di codici ICD-9-CM ↔ ICD-10-IM (nomenclatura italiana). Supporta lookup puntuale, conversione bidirezionale, espansione gerarchica, ricerca testuale full-text e ricerca per similarità semantica (embedding vettoriale o euristica).
+    API per la conversione e ricerca di codici ICD-9-CM ↔ ICD-10-IM e codici CIPI (nomenclatura italiana). Supporta lookup puntuale, conversione bidirezionale, espansione gerarchica, ricerca testuale full-text e ricerca per similarità semantica (embedding vettoriale o euristica).
 
 servers:
 - url: /api/v1
@@ -14,6 +14,8 @@ tags:
   description: Lookup, conversione ed esplorazione dei codici diagnostici ICD-9-CM
 - name: ICD-10-IM
   description: Lookup, conversione ed esplorazione dei codici diagnostici ICD-10-IM
+- name: CIPI
+  description: Lookup ed esplorazione dei codici CIPI (Classificazione degli Interventi e Procedure Italiani)
 - name: Ricerca
   description: Ricerca full-text e similarità semantica
 
@@ -230,6 +232,86 @@ paths:
               schema:
                 $ref: "#/components/schemas/PaginatedResponse"
 
+  # ── CIPI ──────────────────────────────────────────────────────────────────
+
+  /cipi/{code}:
+    get:
+      tags: [ CIPI ]
+      summary: Recupera un codice CIPI
+      description: Restituisce la voce CIPI corrispondente al codice specificato.
+      operationId: getCIPI
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+          example: "H1.1"
+        description: Codice CIPI (es. `H1.1`, `Q3.1`)
+      responses:
+        "200":
+          description: Voce trovata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CIPIEntry"
+              example:
+                code: "H1.1"
+                description: "Bypass aortocoronarico (CABG)"
+                type: "procedura"
+                parent: "H1"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /cipi/{code}/expand:
+    get:
+      tags: [ CIPI ]
+      summary: Espandi codice padre CIPI
+      description: >
+        Restituisce il codice CIPI padre insieme a tutti i suoi codici figli diretti (entries con parent = code). Utile per esplorare la gerarchia (es. `H` → `H1`, `H2`, …).
+      operationId: expandCIPI
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+          example: "H"
+        description: Codice padre CIPI
+      responses:
+        "200":
+          description: Espansione effettuata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CIPIExpandResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /cipi:
+    get:
+      tags: [ CIPI ]
+      summary: Lista codici CIPI (paginata)
+      description: Restituisce una lista paginata di tutti i codici CIPI, con filtro opzionale per tipo.
+      operationId: listCIPI
+      parameters:
+      - $ref: "#/components/parameters/page"
+      - $ref: "#/components/parameters/limit"
+      - name: type
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [ diagnosi, procedura ]
+        description: 'Filtra per tipo: `diagnosi` o `procedura`'
+      responses:
+        "200":
+          description: Lista paginata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CIPIPaginatedResponse"
+
   # ── Ricerca ───────────────────────────────────────────────────────────────
 
   /search:
@@ -237,7 +319,7 @@ paths:
       tags: [ Ricerca ]
       summary: Ricerca full-text
       description: >
-        Ricerca per parola chiave nelle descrizioni ICD-9-CM e/o ICD-10-IM. I risultati sono ordinati per punteggio di rilevanza.
+        Ricerca per parola chiave nelle descrizioni ICD-9-CM, ICD-10-IM e/o CIPI. I risultati sono ordinati per punteggio di rilevanza.
       operationId: search
       parameters:
       - name: q
@@ -252,9 +334,16 @@ paths:
         required: false
         schema:
           type: string
-          enum: [ icd9, icd10, both ]
+          enum: [ icd9, icd10, cipi, both, all ]
           default: both
-        description: "Versione ICD su cui cercare: `icd9`, `icd10` o `both` (default)"
+        description: "Classificazione su cui cercare: `icd9`, `icd10`, `cipi`, `both` (icd9+icd10, default) o `all` (icd9+icd10+cipi)"
+      - name: cipi_type
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [ diagnosi, procedura ]
+        description: "Filtra i risultati CIPI per tipo (applicato solo quando version include `cipi` o `all`)"
       responses:
         "200":
           description: Risultati della ricerca
@@ -276,6 +365,7 @@ paths:
                   category: "Malattie del sistema circolatorio"
                   mappings: [ "410.1" ]
                   score: 1.0
+                cipi_results: []
         "400":
           $ref: "#/components/responses/BadRequest"
 
@@ -284,7 +374,25 @@ paths:
       tags: [ Ricerca ]
       summary: Ricerca per similarità semantica
       description: >
-        Ordina i codici ICD per similarità semantica rispetto al testo clinico fornito. Usa embedding vettoriale (cosine similarity) se il modello è configurato, altrimenti cade in modalità euristica (keyword scoring).
+        Ordina i codici ICD e CIPI per similarità semantica rispetto al testo clinico fornito. Usa embedding vettoriale (cosine similarity) se il modello è configurato, altrimenti cade in modalità euristica (keyword scoring).
+
+
+        Il campo `version` controlla le classificazioni incluse:
+
+        - `all` *(default)*: ICD-9-CM + ICD-10-IM + CIPI
+
+        - `both`: solo ICD-9-CM + ICD-10-IM (retrocompatibile)
+
+        - `icd9`, `icd10`, `cipi`: solo la classificazione specificata
+
+
+        Il campo `cipi_type` filtra i risultati CIPI:
+
+        - `""` *(default)*: sia diagnosi che procedure CIPI
+
+        - `diagnosi`: solo procedure diagnostiche CIPI
+
+        - `procedura`: solo interventi/procedure terapeutiche CIPI
 
 
         Il campo `mode` permette di forzare la modalità:
@@ -303,14 +411,22 @@ paths:
               $ref: "#/components/schemas/SemanticSearchRequest"
             examples:
               infarto:
-                summary: Dolore toracico / infarto
+                summary: Dolore toracico / infarto (tutte le classificazioni)
                 value:
                   q: "Paziente con dolore toracico oppressivo, irradiazione al braccio sinistro, sudorazione profusa e nausea. ECG con sopraslivellamento ST in V1-V4. Diagnosi di STEMI anteriore."
-                  version: both
+                  version: all
+                  limit: 5
+                  mode: auto
+              bypass:
+                summary: Bypass coronarico (solo CIPI procedure)
+                value:
+                  q: "Rivascolarizzazione coronarica mediante bypass aortocoronarico"
+                  version: cipi
+                  cipi_type: procedura
                   limit: 5
                   mode: auto
               diabete:
-                summary: Diabete con complicanze
+                summary: Diabete con complicanze (ICD-10)
                 value:
                   q: "Diabete mellito tipo 2 con polineuropatia periferica, ulcera al piede e insufficienza renale cronica stadio 3."
                   version: icd10
@@ -370,6 +486,39 @@ components:
             type: string
           example: [ "I21.0", "I21.09" ]
 
+    CIPIEntry:
+      type: object
+      description: Voce CIPI con codice, descrizione, tipo e gerarchia
+      properties:
+        code:
+          type: string
+          description: Codice CIPI (es. `H1.1`, `Q3.1`)
+          example: "H1.1"
+        description:
+          type: string
+          description: Descrizione dell'intervento o procedura
+          example: "Bypass aortocoronarico (CABG)"
+        type:
+          type: string
+          enum: [ diagnosi, procedura ]
+          description: Tipo della voce CIPI
+          example: "procedura"
+        parent:
+          type: string
+          description: Codice del nodo padre nella gerarchia CIPI
+          example: "H1"
+
+    CIPISearchResult:
+      allOf:
+      - $ref: "#/components/schemas/CIPIEntry"
+      - type: object
+        properties:
+          score:
+            type: number
+            format: float
+            description: Punteggio di rilevanza (0–1)
+            example: 0.92
+
     SearchResult:
       allOf:
       - $ref: "#/components/schemas/ICDEntry"
@@ -405,6 +554,18 @@ components:
           items:
             $ref: "#/components/schemas/ICDEntry"
 
+    CIPIExpandResponse:
+      type: object
+      description: Codice CIPI padre con tutti i suoi figli diretti
+      properties:
+        parent:
+          $ref: "#/components/schemas/CIPIEntry"
+        children:
+          type: array
+          description: Codici figli diretti (entries con parent = codice padre)
+          items:
+            $ref: "#/components/schemas/CIPIEntry"
+
     PaginatedResponse:
       type: object
       description: Lista paginata di codici ICD
@@ -426,6 +587,27 @@ components:
           items:
             $ref: "#/components/schemas/ICDEntry"
 
+    CIPIPaginatedResponse:
+      type: object
+      description: Lista paginata di codici CIPI
+      properties:
+        total:
+          type: integer
+          description: Numero totale di voci CIPI (prima della paginazione)
+          example: 259
+        page:
+          type: integer
+          description: Numero di pagina corrente
+          example: 1
+        limit:
+          type: integer
+          description: Risultati per pagina
+          example: 20
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CIPIEntry"
+
     SearchResponse:
       type: object
       description: Risultati della ricerca full-text
@@ -441,6 +623,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SearchResult"
+        cipi_results:
+          type: array
+          items:
+            $ref: "#/components/schemas/CIPISearchResult"
 
     SemanticSearchRequest:
       type: object
@@ -452,21 +638,26 @@ components:
           example: "Paziente con dolore toracico, elevazione ST, infarto anteriore"
         version:
           type: string
-          enum: [ icd9, icd10, both ]
-          default: both
-          description: "Versione ICD su cui cercare: `icd9`, `icd10` o `both`"
+          enum: [ icd9, icd10, cipi, both, all ]
+          default: all
+          description: "Classificazione su cui cercare: `icd9`, `icd10`, `cipi`, `both` (icd9+icd10) o `all` (icd9+icd10+cipi, default)"
         limit:
           type: integer
           minimum: 1
           maximum: 50
           default: 10
-          description: Numero massimo di risultati per versione
+          description: Numero massimo di risultati per classificazione
         mode:
           type: string
           enum: [ auto, embedding, heuristic ]
           default: auto
           description: >
             Modalità di ricerca: `auto` (embedding se disponibile, sennò euristica), `embedding` (solo vettoriale, errore 503 se non configurato), `heuristic` (solo keyword scoring)
+        cipi_type:
+          type: string
+          enum: [ diagnosi, procedura ]
+          description: >
+            Filtra i risultati CIPI per tipo. Lasciare vuoto (default) per entrambi i tipi.
 
     SemanticSearchResponse:
       type: object
@@ -481,6 +672,11 @@ components:
             $ref: "#/components/schemas/SearchResult"
         icd10_results:
           type: array
+          items:
+            $ref: "#/components/schemas/SearchResult"
+        cipi_results:
+          type: array
+          description: Risultati CIPI (il campo `category` contiene il tipo CIPI — `diagnosi` o `procedura`)
           items:
             $ref: "#/components/schemas/SearchResult"
         model:

@@ -54,10 +54,21 @@ CREATE TABLE IF NOT EXISTS icd_mappings (
     UNIQUE(version_id, icd9_code, icd10_code)
 );
 
+CREATE TABLE IF NOT EXISTS cipi_codes (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    version_id  INTEGER NOT NULL REFERENCES icd_versions(id),
+    code        TEXT    NOT NULL,
+    description TEXT    NOT NULL,
+    type        TEXT    NOT NULL,  -- 'diagnosi' | 'procedura'
+    parent      TEXT,
+    is_billable INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(version_id, code)
+);
+
 CREATE TABLE IF NOT EXISTS icd_embeddings (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     version_id INTEGER NOT NULL,
-    icd_type   TEXT    NOT NULL,  -- 'icd9' or 'icd10'
+    icd_type   TEXT    NOT NULL,  -- 'icd9' | 'icd10' | 'cipi'
     code       TEXT    NOT NULL,
     model      TEXT    NOT NULL,
     vector     BLOB    NOT NULL,  -- IEEE-754 float32 little-endian
@@ -67,6 +78,7 @@ CREATE TABLE IF NOT EXISTS icd_embeddings (
 CREATE INDEX IF NOT EXISTS idx_icd9d_code  ON icd9_diagnosi(code);
 CREATE INDEX IF NOT EXISTS idx_icd9p_code  ON icd9_procedure(code);
 CREATE INDEX IF NOT EXISTS idx_icd10_code  ON icd10_codes(code);
+CREATE INDEX IF NOT EXISTS idx_cipi_code   ON cipi_codes(code);
 CREATE INDEX IF NOT EXISTS idx_map_icd9    ON icd_mappings(icd9_code);
 CREATE INDEX IF NOT EXISTS idx_map_icd10   ON icd_mappings(icd10_code);
 CREATE INDEX IF NOT EXISTS idx_emb_lookup  ON icd_embeddings(version_id, icd_type, model);

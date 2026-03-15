@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"embed"
 	"io/fs"
@@ -13,6 +14,7 @@ import (
 	"icd-converter/internal/api"
 	"icd-converter/internal/db"
 	embedpkg "icd-converter/internal/embed"
+	"icd-converter/internal/icd"
 
 	"github.com/gin-gonic/gin"
 )
@@ -24,6 +26,8 @@ var webFS embed.FS
 var officialDataFS embed.FS
 
 func main() {
+	loadDotEnv(".env")
+
 	// ── Configuration from environment ──────────────────────────────────────
 	port   := envOr("PORT", "8080")
 	dbPath := envOr("ICD_DB_PATH", "icd.db")
@@ -57,8 +61,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("load store: %v", err)
 	}
-	log.Printf("ICD store loaded: %d ICD-9 codes, %d ICD-10 codes",
-		len(store.AllICD9()), len(store.AllICD10()))
+	log.Printf("ICD store loaded: %d ICD-9 codes, %d ICD-10 codes, %d CIPI codes",
+		len(store.AllICD9()), len(store.AllICD10()), len(store.AllCIPI()))
 
 	// ── Semantic Embedding Search ─────────────────────────────────────────────
 	embedModel := os.Getenv("LLM_EMBED_MODEL")
@@ -83,8 +87,13 @@ func main() {
 		if err != nil {
 			log.Fatalf("embed icd10: %v", err)
 		}
-		api.SetEmbedder(builder, idx9, idx10)
-		log.Printf("Semantic search ready: model=%s  icd9=%d  icd10=%d vectors", embedModel, idx9.Len(), idx10.Len())
+		idxCIPI, err := builder.BuildOrLoad(ctx, sqldb, versionID, "cipi", cipiToICDEntries(store.AllCIPI()))
+		if err != nil {
+			log.Fatalf("embed cipi: %v", err)
+		}
+		api.SetEmbedder(builder, idx9, idx10, idxCIPI)
+		log.Printf("Semantic search ready: model=%s  icd9=%d  icd10=%d  cipi=%d vectors",
+			embedModel, idx9.Len(), idx10.Len(), idxCIPI.Len())
 	} else {
 		log.Printf("Semantic search disabled (set LLM_EMBED_MODEL to enable, e.g. LLM_EMBED_MODEL=all-minilm)")
 	}
@@ -154,4 +163,53 @@ func corsMiddleware() gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+// loadDotEnv reads key=value pairs from path and sets them as environment
+// variables, skipping blank lines and lines starting with '#'.
+// Variables already present in the environment are never overwritten.
+func loadDotEnv(path string) {
+	f, err := os.Open(path)
+	if err != nil {
+		return // .env is optional
+	}
+	defer f.Close()
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		// strip optional surrounding quotes
+		if len(value) >= 2 &&
+			((value[0] == '"' && value[len(value)-1] == '"') ||
+				(value[0] == '\'' && value[len(value)-1] == '\'')) {
+			value = value[1 : len(value)-1]
+		}
+		if os.Getenv(key) == "" {
+			os.Setenv(key, value)
+		}
+	}
+}
+
+// cipiToICDEntries converts CIPI entries to ICDEntry slices so they can be used
+// with the shared embedding index infrastructure.  The Type field is mapped to
+// Category; Mappings is left empty.
+func cipiToICDEntries(entries []icd.CIPIEntry) []icd.ICDEntry {
+	out := make([]icd.ICDEntry, len(entries))
+	for i, e := range entries {
+		out[i] = icd.ICDEntry{
+			Code:        e.Code,
+			Description: e.Description,
+			Category:    e.Type,
+			Mappings:    []string{},
+		}
+	}
+	return out
 }

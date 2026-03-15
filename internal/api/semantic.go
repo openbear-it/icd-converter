@@ -15,15 +15,17 @@ import (
 // embedBuilder is the configured embedding builder (nil when EMBED_MODEL is not set).
 var embedBuilder *embed.Builder
 
-// embedICD9 and embedICD10 hold the precomputed embedding indexes.
+// embedICD9, embedICD10 and embedCIPI hold the precomputed embedding indexes.
 var embedICD9 *embed.Index
 var embedICD10 *embed.Index
+var embedCIPI *embed.Index
 
 // SetEmbedder injects the embedding builder and precomputed indexes.
-func SetEmbedder(builder *embed.Builder, icd9 *embed.Index, icd10 *embed.Index) {
+func SetEmbedder(builder *embed.Builder, icd9 *embed.Index, icd10 *embed.Index, cipi *embed.Index) {
 	embedBuilder = builder
 	embedICD9 = icd9
 	embedICD10 = icd10
+	embedCIPI = cipi
 }
 
 // SemanticSearchResponse is returned by the semantic search endpoint.
@@ -31,23 +33,26 @@ type SemanticSearchResponse struct {
 	Query        string               `json:"query"`
 	ICD9Results  []embed.SearchResult `json:"icd9_results"`
 	ICD10Results []embed.SearchResult `json:"icd10_results"`
+	CIPIResults  []embed.SearchResult `json:"cipi_results"`
 	Model        string               `json:"model"`
 }
 
 // SemanticSearchRequest is the JSON body for the semantic search endpoint.
 type SemanticSearchRequest struct {
-	Query   string `json:"q"   binding:"required"`
-	Version string `json:"version"`
-	Limit   int    `json:"limit"`
+	Query    string `json:"q"   binding:"required"`
+	Version  string `json:"version"`
+	Limit    int    `json:"limit"`
 	// Mode controls which engine is used: "" or "auto" = prefer embedding, fall back to heuristic;
 	// "heuristic" = always keyword search; "embedding" = fail if embedding index not ready.
-	Mode string `json:"mode"`
+	Mode     string `json:"mode"`
+	// CIPIType restricts CIPI results: "" or "all" = both; "diagnosi"; "procedura"
+	CIPIType string `json:"cipi_type"`
 }
 
 // SemanticSearch godoc
 // POST /api/v1/search/semantic
-// Body: { "q": "...", "version": "both", "limit": 10, "mode": "auto" }
-// Ranks ICD codes by embedding cosine similarity or keyword heuristic.
+// Body: { "q": "...", "version": "all", "limit": 10, "mode": "auto", "cipi_type": "" }
+// Ranks ICD/CIPI codes by embedding cosine similarity or keyword heuristic.
 func (h *Handler) SemanticSearch(c *gin.Context) {
 	var req SemanticSearchRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -66,12 +71,13 @@ func (h *Handler) SemanticSearch(c *gin.Context) {
 	limit := clamp(req.Limit, 1, 50)
 	version := strings.ToLower(req.Version)
 	if version == "" {
-		version = "both"
+		version = "all"
 	}
 	mode := strings.ToLower(strings.TrimSpace(req.Mode))
 	if mode == "" {
 		mode = "auto"
 	}
+	cipiType := strings.ToLower(strings.TrimSpace(req.CIPIType))
 
 	start := time.Now()
 
@@ -87,24 +93,26 @@ func (h *Handler) SemanticSearch(c *gin.Context) {
 	if mode == "heuristic" || (mode == "auto" && embedBuilder == nil) {
 		log.Printf("search/semantic: mode=heuristic version=%s limit=%d query=%q", version, limit, q)
 		var icd9Res, icd10Res []embed.SearchResult
-		if version != "icd10" {
+		var cipiRes []embed.SearchResult
+		if version != "icd10" && version != "cipi" {
 			icd9Res = heuristicToEmbedResults(h.store.SearchICD9(q), limit)
 		}
-		if version != "icd9" {
+		if version != "icd9" && version != "cipi" {
 			icd10Res = heuristicToEmbedResults(h.store.SearchICD10(q), limit)
 		}
-		if icd9Res == nil {
-			icd9Res = []embed.SearchResult{}
+		if version == "cipi" || version == "all" || version == "both" {
+			cipiRes = heuristicCIPIToEmbedResults(h.store.SearchCIPI(q, cipiType), limit)
 		}
-		if icd10Res == nil {
-			icd10Res = []embed.SearchResult{}
-		}
-		log.Printf("search/semantic: done mode=heuristic icd9=%d icd10=%d elapsed=%s",
-			len(icd9Res), len(icd10Res), time.Since(start).Round(time.Millisecond))
+		icd9Res = emptyIfNil(icd9Res)
+		icd10Res = emptyIfNil(icd10Res)
+		cipiRes = emptyIfNil(cipiRes)
+		log.Printf("search/semantic: done mode=heuristic icd9=%d icd10=%d cipi=%d elapsed=%s",
+			len(icd9Res), len(icd10Res), len(cipiRes), time.Since(start).Round(time.Millisecond))
 		c.JSON(http.StatusOK, SemanticSearchResponse{
 			Query:        q,
 			ICD9Results:  icd9Res,
 			ICD10Results: icd10Res,
+			CIPIResults:  cipiRes,
 			Model:        "heuristic",
 		})
 		return
@@ -121,27 +129,30 @@ func (h *Handler) SemanticSearch(c *gin.Context) {
 		return
 	}
 
-	var icd9Res, icd10Res []embed.SearchResult
+	var icd9Res, icd10Res, cipiRes []embed.SearchResult
 
-	if version != "icd10" && embedICD9 != nil {
+	if version != "icd10" && version != "cipi" && embedICD9 != nil {
 		icd9Res = embedICD9.Search(queryVec, limit)
 	}
-	if version != "icd9" && embedICD10 != nil {
+	if version != "icd9" && version != "cipi" && embedICD10 != nil {
 		icd10Res = embedICD10.Search(queryVec, limit)
 	}
-	if icd9Res == nil {
-		icd9Res = []embed.SearchResult{}
-	}
-	if icd10Res == nil {
-		icd10Res = []embed.SearchResult{}
+	if (version == "cipi" || version == "all" || version == "both") && embedCIPI != nil {
+		raw := embedCIPI.Search(queryVec, limit)
+		cipiRes = filterByCIPIType(raw, cipiType)
 	}
 
-	log.Printf("search/semantic: done mode=embedding model=%q icd9=%d icd10=%d elapsed=%s",
-		embedBuilder.ModelName(), len(icd9Res), len(icd10Res), time.Since(start).Round(time.Millisecond))
+	icd9Res = emptyIfNil(icd9Res)
+	icd10Res = emptyIfNil(icd10Res)
+	cipiRes = emptyIfNil(cipiRes)
+
+	log.Printf("search/semantic: done mode=embedding model=%q icd9=%d icd10=%d cipi=%d elapsed=%s",
+		embedBuilder.ModelName(), len(icd9Res), len(icd10Res), len(cipiRes), time.Since(start).Round(time.Millisecond))
 	c.JSON(http.StatusOK, SemanticSearchResponse{
 		Query:        q,
 		ICD9Results:  icd9Res,
 		ICD10Results: icd10Res,
+		CIPIResults:  cipiRes,
 		Model:        embedBuilder.ModelName(),
 	})
 }
@@ -168,4 +179,59 @@ func heuristicToEmbedResults(results []icd.SearchResult, limit int) []embed.Sear
 		out[i] = embed.SearchResult{ICDEntry: r.ICDEntry, Score: score}
 	}
 	return out
+}
+
+// heuristicCIPIToEmbedResults converts CIPI keyword results into embed.SearchResult
+// by mapping CIPIEntry → ICDEntry (Category = Type, Mappings = nil).
+func heuristicCIPIToEmbedResults(results []icd.CIPISearchResult, limit int) []embed.SearchResult {
+	if len(results) > limit {
+		results = results[:limit]
+	}
+	var maxScore float64
+	for _, r := range results {
+		if r.Score > maxScore {
+			maxScore = r.Score
+		}
+	}
+	out := make([]embed.SearchResult, len(results))
+	for i, r := range results {
+		score := r.Score
+		if maxScore > 0 {
+			score /= maxScore
+		}
+		out[i] = embed.SearchResult{
+			ICDEntry: icd.ICDEntry{
+				Code:        r.Code,
+				Description: r.Description,
+				Category:    r.Type,
+				Mappings:    []string{},
+			},
+			Score: score,
+		}
+	}
+	return out
+}
+
+// filterByCIPIType filters embedding search results by CIPI type ("diagnosi" | "procedura").
+// In the CIPI embedding index, the ICDEntry.Category field holds the CIPI type.
+// Pass "" to skip filtering.
+func filterByCIPIType(results []embed.SearchResult, cipiType string) []embed.SearchResult {
+	if cipiType == "" || cipiType == "all" {
+		return results
+	}
+	filtered := results[:0:0]
+	for _, r := range results {
+		if r.Category == cipiType {
+			filtered = append(filtered, r)
+		}
+	}
+	return filtered
+}
+
+// emptyIfNil returns an empty slice if the input is nil (avoids null in JSON).
+func emptyIfNil(s []embed.SearchResult) []embed.SearchResult {
+	if s == nil {
+		return []embed.SearchResult{}
+	}
+	return s
 }

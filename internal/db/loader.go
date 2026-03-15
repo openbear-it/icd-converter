@@ -60,7 +60,13 @@ func LoadStore(sqldb *sql.DB) (*icd.Store, error) {
 		return nil, err
 	}
 
-	return icd.NewStore(icd9entries, icd10entries), nil
+	// ── Load CIPI ──────────────────────────────────────────────────────────
+	cipiEntries, err := loadCIPI(sqldb, versionID)
+	if err != nil {
+		return nil, err
+	}
+
+	return icd.NewStore(icd9entries, icd10entries, cipiEntries), nil
 }
 
 func loadICD9(db *sql.DB, versionID int64, table string, icd9to10 map[string][]string) ([]icd.ICDEntry, error) {
@@ -211,4 +217,29 @@ func indexOf(s string, b byte) int {
 		}
 	}
 	return -1
+}
+
+func loadCIPI(db *sql.DB, versionID int64) ([]icd.CIPIEntry, error) {
+	rows, err := db.Query(
+		`SELECT code, description, type, COALESCE(parent,'') FROM cipi_codes WHERE version_id = ? ORDER BY code`,
+		versionID)
+	if err != nil {
+		return nil, fmt.Errorf("query cipi_codes: %w", err)
+	}
+	defer rows.Close()
+
+	var entries []icd.CIPIEntry
+	for rows.Next() {
+		var code, desc, typ, parent string
+		if err := rows.Scan(&code, &desc, &typ, &parent); err != nil {
+			continue
+		}
+		entries = append(entries, icd.CIPIEntry{
+			Code:        code,
+			Description: desc,
+			Type:        typ,
+			Parent:      parent,
+		})
+	}
+	return entries, rows.Err()
 }

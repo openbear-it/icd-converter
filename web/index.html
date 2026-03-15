@@ -469,7 +469,7 @@
 
 <header>
   <h1>ICD Converter</h1>
-  <p>Conversione ICD-9 ↔ ICD-10 · Ricerca testuale · Ricerca similiarità</p>
+  <p>Conversione ICD-9 ↔ ICD-10 · Ricerca testuale · Ricerca similitudine · Codici CIPI procedure</p>
 </header>
 
 <main>
@@ -478,7 +478,8 @@
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('convert')">Converti Codice</button>
     <button class="tab-btn" onclick="switchTab('search')">Ricerca Testuale</button>
-    <button class="tab-btn" onclick="switchTab('infer')">Ricerca Similiarità</button>
+    <button class="tab-btn" onclick="switchTab('infer')">Ricerca Similitudine</button>
+    <button class="tab-btn" onclick="switchTab('cipi')">Codici CIPI</button>
     <button class="tab-btn" onclick="switchTab('list')">Esplora Codici</button>
     <button class="tab-btn" onclick="switchTab('info')">Info</button>
     <a class="tab-btn" href="/ui/swagger.html" target="_blank" style="text-decoration:none;margin-left:auto">API Docs ↗</a>
@@ -525,18 +526,20 @@
   <!-- PANEL: SEARCH -->
   <div class="panel" id="panel-search">
     <div class="card">
-      <h2>Ricerca Testuale nei Codici ICD</h2>
+      <h2>Ricerca Testuale nei Codici ICD e CIPI</h2>
       <div class="form-row">
         <div class="form-group">
           <label>Testo libero</label>
           <input type="text" id="search-q" placeholder="es. infarto miocardio, diabetes, pneumonia…" />
         </div>
-        <div class="form-group" style="max-width:130px">
+        <div class="form-group" style="max-width:160px">
           <label>Versione</label>
           <select id="search-ver">
-            <option value="both">Entrambe</option>
+            <option value="both">ICD-9 + ICD-10</option>
+            <option value="all">Tutte (+ CIPI)</option>
             <option value="icd9">Solo ICD-9</option>
             <option value="icd10">Solo ICD-10</option>
+            <option value="cipi">Solo CIPI</option>
           </select>
         </div>
         <button class="btn" onclick="doSearch()">Cerca</button>
@@ -579,12 +582,22 @@
             <option value="heuristic">Euristica</option>
           </select>
         </div>
-        <div class="form-group" style="max-width:130px">
+        <div class="form-group" style="max-width:160px">
           <label>Versione</label>
           <select id="sem-ver">
-            <option value="both">Entrambe</option>
+            <option value="all">Tutte (+ CIPI)</option>
+            <option value="both">ICD-9 + ICD-10</option>
             <option value="icd9">Solo ICD-9</option>
             <option value="icd10">Solo ICD-10</option>
+            <option value="cipi">Solo CIPI</option>
+          </select>
+        </div>
+        <div class="form-group" style="max-width:165px">
+          <label>Tipo CIPI</label>
+          <select id="sem-cipi-type">
+            <option value="">Tutte le procedure</option>
+            <option value="procedura">Solo codificanti</option>
+            <option value="chapter">Solo capitoli</option>
           </select>
         </div>
         <div class="form-group" style="max-width:90px">
@@ -610,13 +623,74 @@
     <div id="result-infer"></div>
   </div>
 
+  <!-- PANEL: CIPI -->
+  <div class="panel" id="panel-cipi">
+    <div class="card">
+      <h2>Ricerca Codici CIPI</h2>
+      <p style="font-size:.83rem;color:#718096;margin-bottom:.8rem">
+        Cerca nei <strong>15.164 codici CIPI v.GAMMA 2.0</strong> — Classificazione degli Interventi e delle Procedure Italiani.<br>
+        La struttura è gerarchica: capitoli (2 cifre) → blocchi (3 cifre) → categorie (4 cifre) → codici codificanti (fatturabili).
+      </p>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Testo libero</label>
+          <input type="text" id="cipi-search-q" placeholder="es. artroscopia, bypass, laparoscopia…" />
+        </div>
+        <div class="form-group" style="max-width:190px">
+          <label>Tipo</label>
+          <select id="cipi-search-type">
+            <option value="">Tutti i tipi</option>
+            <option value="procedura">Solo codificanti (fatturabili)</option>
+            <option value="chapter">Solo capitoli</option>
+            <option value="block">Solo blocchi</option>
+            <option value="category">Solo categorie</option>
+          </select>
+        </div>
+        <button class="btn" onclick="doCIPISearch()">Cerca</button>
+      </div>
+      <div class="examples">
+        <span>Esempi:</span>
+        <span class="example-chip" onclick="setCIPISearch('artroscopia')">artroscopia</span>
+        <span class="example-chip" onclick="setCIPISearch('bypass cardiaco')">bypass cardiaco</span>
+        <span class="example-chip" onclick="setCIPISearch('laparoscopia')">laparoscopia</span>
+        <span class="example-chip" onclick="setCIPISearch('protesi anca')">protesi anca</span>
+        <span class="example-chip" onclick="setCIPISearch('endoscopia')">endoscopia</span>
+        <span class="example-chip" onclick="setCIPISearch('trapianto rene')">trapianto rene</span>
+        <span class="example-chip" onclick="setCIPISearch('angioplastica')">angioplastica</span>
+      </div>
+    </div>
+    <!-- Explorer gerarchico -->
+    <div class="card">
+      <h2>Esplora Gerarchia CIPI</h2>
+      <p style="font-size:.83rem;color:#718096;margin-bottom:.6rem">Inserisci un codice per espandere i suoi figli diretti, oppure lascia vuoto per vedere tutti i capitoli radice.</p>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Codice CIPI (lascia vuoto per i capitoli radice)</label>
+          <input type="text" id="cipi-exp-code" placeholder="es. 00, 00.0, 00.00" />
+        </div>
+        <button class="btn" onclick="doCIPIExpand()">Espandi</button>
+      </div>
+      <div class="examples">
+        <span>Navigazione rapida:</span>
+        <span class="example-chip" onclick="setCIPIExpand('')">Tutti i capitoli</span>
+        <span class="example-chip" onclick="setCIPIExpand('00')">00 Non classificati</span>
+        <span class="example-chip" onclick="setCIPIExpand('01')">01 Cranio/Cervello</span>
+        <span class="example-chip" onclick="setCIPIExpand('35')">35 Cuore</span>
+        <span class="example-chip" onclick="setCIPIExpand('45')">45 Intestino</span>
+        <span class="example-chip" onclick="setCIPIExpand('81')">81 Arti/Ortopedia</span>
+      </div>
+    </div>
+    <div id="result-cipi"></div>
+  </div>
+
   <!-- PANEL: INFO -->
   <div class="panel" id="panel-info">
     <div class="card">
       <h2>Fonti dei Dati</h2>
       <p style="font-size:.85rem;color:#4a5568;margin-bottom:1rem">
-        Tutti i dati ICD utilizzati in questa applicazione provengono da fonti ufficiali del <strong>Ministero della Salute italiano</strong>
+        Tutti i dati utilizzati in questa applicazione provengono da fonti ufficiali del <strong>Ministero della Salute italiano</strong>
         e dell'<strong>Organizzazione Mondiale della Sanità (OMS)</strong>.
+        Sono inclusi i codici ICD-9-CM, ICD-10-IM e <strong>CIPI</strong> (Classificazione degli Interventi e delle Procedure Italiani).
       </p>
   
       <h3 style="font-size:.95rem;color:#1a56db;margin:.8rem 0 .4rem">ICD-9-CM — Classificazione Internazionale delle Malattie, 9ª revisione, Modificazione Clinica</h3>
@@ -643,22 +717,46 @@
       <h3 style="font-size:.95rem;color:#1a56db;margin:.8rem 0 .4rem">ICD-10-IM — Classificazione Internazionale delle Malattie, 10ª revisione, versione Italiana per uso del Ministero della Salute</h3>
       <div class="icd-card">
         <div class="code">Elenco Sistematico ICD-10-IM v.GAMMA 2.1</div>
-        <div class="desc">14.773 codici ICD-10-IM in lingua italiana, validi dal 16 febbraio 2026.</div>
+        <div class="desc">14.785 codici ICD-10-IM in lingua italiana, validi dal 16 febbraio 2026.</div>
         <div class="desc" style="margin-top:.4rem">
-          Fonte: <a href="https://www.salute.gov.it/new/it/tema/assistenza-ospedaliera-sdo/documentazione-tecnica/" target="_blank" style="color:#1a56db">Ministero della Salute — Documentazione tecnica SDO</a>
+          Fonte: <a href="https://www.salute.gov.it/new/sites/default/files/2026-02/3.ELENCO_SISTEMATICO_ICD-10-IM_V.GAMMA_2.1_VALIDITA_DA_16022026.xlsx" target="_blank" style="color:#1a56db">3.ELENCO_SISTEMATICO_ICD-10-IM_V.GAMMA_2.1_VALIDITA_DA_16022026.xlsx</a>
+          — <a href="https://www.salute.gov.it/new/it/tema/assistenza-ospedaliera-sdo/documentazione-tecnica/" target="_blank" style="color:#1a56db">Ministero della Salute — Documentazione tecnica SDO</a>
         </div>
-        <span class="badge">14.773 codici</span>
+        <span class="badge">14.785 codici</span>
         <span class="badge">Italiano</span>
         <span class="badge">Validità: 16/02/2026</span>
       </div>
       <div class="icd-card">
         <div class="code">Tabella di Transcodifica Bidirezionale ICD-9-CM ↔ ICD-10-IM v.GAMMA 2.1</div>
-        <div class="desc">18.189 mappature ufficiali bidirezionali tra ICD-9-CM e ICD-10-IM.</div>
+        <div class="desc">19.539 mappature ufficiali bidirezionali tra ICD-9-CM e ICD-10-IM.</div>
         <div class="desc" style="margin-top:.4rem">
-          Fonte: <a href="https://www.salute.gov.it/new/it/tema/assistenza-ospedaliera-sdo/documentazione-tecnica/" target="_blank" style="color:#1a56db">Ministero della Salute — Documentazione tecnica SDO</a>
+          Fonte: <a href="https://www.salute.gov.it/new/sites/default/files/2026-02/4.TAB_TRANSCOD_ICD-9-CM-ICD-10-IM_V.GAMMA_2.1.XLSX" target="_blank" style="color:#1a56db">4.TAB_TRANSCOD_ICD-9-CM-ICD-10-IM_V.GAMMA_2.1.XLSX</a>
+          — <a href="https://www.salute.gov.it/new/it/tema/assistenza-ospedaliera-sdo/documentazione-tecnica/" target="_blank" style="color:#1a56db">Ministero della Salute — Documentazione tecnica SDO</a>
         </div>
-        <span class="badge">18.189 mappature</span>
-        <span class="badge">Dicembre 2025</span>
+        <span class="badge">19.539 mappature</span>
+        <span class="badge">Febbraio 2026</span>
+      </div>
+  
+      <h3 style="font-size:.95rem;color:#1a56db;margin:.8rem 0 .4rem">CIPI — Classificazione degli Interventi e delle Procedure Italiani v.GAMMA 2.0</h3>
+      <div class="icd-card">
+        <div class="code">Tabella CIPI v.GAMMA 2.0 (2025)</div>
+        <div class="desc">15.164 codici di procedura italiani: 98 capitoli, 867 blocchi, 3.528 categorie e 10.671 codici codificanti (fatturabili).</div>
+        <div class="desc" style="margin-top:.4rem">
+          Fonte: <a href="https://www.salute.gov.it/new/sites/default/files/2026-02/6.TAB_CIPI_V.GAMMA_2.0.xlsx" target="_blank" style="color:#1a56db">6.TAB_CIPI_V.GAMMA_2.0.xlsx</a>
+          — <a href="https://www.salute.gov.it/new/it/tema/assistenza-ospedaliera-sdo/documentazione-tecnica/" target="_blank" style="color:#1a56db">Ministero della Salute — Documentazione tecnica SDO</a>
+        </div>
+        <span class="badge">15.164 codici</span>
+        <span class="badge">Italiano</span>
+        <span class="badge">Versione GAMMA 2.0</span>
+      </div>
+      <div class="icd-card">
+        <div class="code">Transcodifica ICD-9-CM ↔ CIPI v.2.0.1</div>
+        <div class="desc">Tabella ufficiale di transcodifica bidirezionale tra ICD-9-CM Volume 3 (procedure) e CIPI.</div>
+        <div class="desc" style="margin-top:.4rem">
+          Fonte: <a href="https://www.salute.gov.it/new/sites/default/files/2026-03/TRANSCODIFICA-ICD9CM-CIPI-V.2.0.1-WEB.xlsx" target="_blank" style="color:#1a56db">TRANSCODIFICA-ICD9CM-CIPI-V.2.0.1-WEB.xlsx</a>
+          — <a href="https://www.salute.gov.it/new/it/tema/assistenza-ospedaliera-sdo/documentazione-tecnica/" target="_blank" style="color:#1a56db">Ministero della Salute — Documentazione tecnica SDO</a>
+        </div>
+        <span class="badge">Marzo 2026</span>
       </div>
   
       <h3 style="font-size:.95rem;color:#1a56db;margin:.8rem 0 .4rem">Nota sull'utilizzo ufficiale</h3>
@@ -742,8 +840,8 @@ const BASE = '/api/v1';
 
 /* ── TAB SWITCHING ─────────────────────────────────────────── */
 function switchTab(name) {
+  const panels = ['convert','search','infer','cipi','list','info'];
   document.querySelectorAll('.tab-btn').forEach((b,i) => {
-    const panels = ['convert','search','infer','list','info'];
     b.classList.toggle('active', panels[i] === name);
   });
   document.querySelectorAll('.panel').forEach(p => {
@@ -940,7 +1038,22 @@ async function doSearch() {
   out.innerHTML = '<p style="color:#718096">Ricerca…</p>';
   try {
     const data = await apiFetch(`${BASE}/search?q=${encodeURIComponent(q)}&version=${ver}`);
-    renderSearchResults(data.icd9_results || [], data.icd10_results || [], 'result-search');
+    const icd9  = data.icd9_results  || [];
+    const icd10 = data.icd10_results || [];
+    const cipi  = data.cipi_results  || [];
+    if (ver === 'cipi') {
+      renderCIPIResults(cipi, 'result-search');
+    } else if (ver === 'all') {
+      out.innerHTML = '';
+      if (icd9.length || icd10.length) {
+        renderSearchResults(icd9, icd10, 'result-search');
+        if (cipi.length) out.insertAdjacentHTML('beforeend', cipiSectionHtml(cipi));
+      } else {
+        out.innerHTML = cipiSectionHtml(cipi);
+      }
+    } else {
+      renderSearchResults(icd9, icd10, 'result-search');
+    }
   } catch(e) {
     out.innerHTML = `<p style="color:#e53e3e">${escHtml(e.message)}</p>`;
   }
@@ -995,8 +1108,10 @@ async function expandParent(btn) {
     } else {
       data.children.forEach(c => {
         const displayDesc = version === 'icd9' ? childOnlyDesc(c.description) : c.description;
+        const typeBadge = version === 'cipi' ? cipiTypeBadge(c.type) : '';
         html += `<div class="expand-child-row">
           <span class="expand-child-code">${escHtml(c.code)}</span>
+          ${typeBadge}
           <span class="expand-child-desc-text">${escHtml(displayDesc)}</span>
         </div>`;
       });
@@ -1020,25 +1135,43 @@ function setSemantic(q) {
 }
 
 async function doSemanticSearch() {
-  const q     = document.getElementById('sem-q').value.trim();
-  const ver   = document.getElementById('sem-ver').value;
-  const limit = document.getElementById('sem-limit').value;
-  const out   = document.getElementById('result-infer');
+  const q        = document.getElementById('sem-q').value.trim();
+  const ver      = document.getElementById('sem-ver').value;
+  const limit    = document.getElementById('sem-limit').value;
+  const cipiType = document.getElementById('sem-cipi-type').value;
+  const out      = document.getElementById('result-infer');
   if (!q) { out.innerHTML = '<p style="color:#e53e3e">Inserisci un testo.</p>'; return; }
 
   out.innerHTML = '<p style="color:#718096">Ricerca semantica in corso…</p>';
   try {
-    const mode  = document.getElementById('sem-mode').value;
+    const mode = document.getElementById('sem-mode').value;
+    const body = { q, version: ver, limit: parseInt(limit, 10), mode };
+    if (cipiType) body.cipi_type = cipiType;
     const data = await apiFetch(`${BASE}/search/semantic`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ q, version: ver, limit: parseInt(limit, 10), mode })
+      body: JSON.stringify(body)
     });
     const modeLabel = data.model === 'heuristic' ? 'euristica' : `embedding · modello: <strong>${escHtml(data.model)}</strong>`;
+    const icd9  = data.icd9_results  || [];
+    const icd10 = data.icd10_results || [];
+    const cipi  = data.cipi_results  || [];
     out.innerHTML = `<div class="card" style="padding:.6rem 1rem;margin-bottom:.75rem">
       <small style="color:#718096">Modalità: <strong>${modeLabel}</strong> · query: <em>${escHtml(data.query)}</em></small>
     </div><div id="result-infer-grid"></div>`;
-    renderSearchResults(data.icd9_results || [], data.icd10_results || [], 'result-infer-grid');
+    const grid = document.getElementById('result-infer-grid');
+    if (ver === 'cipi') {
+      renderCIPIResults(cipi, 'result-infer-grid');
+    } else if (ver === 'all') {
+      if (icd9.length || icd10.length) {
+        renderSearchResults(icd9, icd10, 'result-infer-grid');
+        if (cipi.length) grid.insertAdjacentHTML('beforeend', cipiSectionHtml(cipi));
+      } else {
+        grid.innerHTML = cipiSectionHtml(cipi);
+      }
+    } else {
+      renderSearchResults(icd9, icd10, 'result-infer-grid');
+    }
   } catch(e) {
     const hint = e.message.includes('not available')
       ? `<br><small style="color:#718096">Configura <code>LLM_EMBED_MODEL</code> (es. <code>LLM_EMBED_MODEL=nomic-embed-text</code> con Ollama) per abilitare la ricerca semantica.</small>`
@@ -1056,6 +1189,145 @@ function setInfer(text) {
 
 async function doInfer() {
   return doSemanticSearch();
+}
+
+/* ── CIPI HELPERS ─────────────────────────────────────────────────── */
+function cipiTypeBadge(type) {
+  const labels = { chapter: 'Capitolo', block: 'Blocco', category: 'Categoria', procedura: 'Codificante' };
+  const styles = {
+    chapter:   'background:#fef3c7;color:#92400e',
+    block:     'background:#dbeafe;color:#1e40af',
+    category:  'background:#d1fae5;color:#065f46',
+    procedura: 'background:#ede9fe;color:#5b21b6',
+  };
+  const style = styles[type] || 'background:#f0f4f8;color:#4a5568';
+  return `<span style="font-size:.67rem;padding:.1rem .45rem;border-radius:20px;${style};font-weight:700;white-space:nowrap">${escHtml(labels[type] || type)}</span>`;
+}
+
+function cipiCardHtml(entry, score, maxScore) {
+  let scoreHtml = '';
+  if (score !== undefined && maxScore > 0) {
+    const pct = Math.round((score / maxScore) * 100);
+    const cls = pct >= 70 ? 'score-high' : pct >= 40 ? 'score-med' : 'score-low';
+    scoreHtml = `<span class="score-pill ${cls}">${pct}% corr.</span>`;
+  }
+  const isBillable = entry.type === 'procedura';
+  const expandHtml = isBillable ? '' : `
+    <div class="expand-trigger-row">
+      <button class="expand-parent-btn" data-version="cipi" data-parent="${escHtml(entry.code)}" onclick="expandParent(this)">&#x25B6; espandi sottocategorie</button>
+    </div>
+    <div class="expand-children-container" style="display:none"></div>`;
+  return `<div class="search-card${isBillable ? '' : ' is-parent'}">
+    <div class="search-card-header">
+      <span class="search-code">${escHtml(entry.code)}</span>
+      ${cipiTypeBadge(entry.type)}
+    </div>
+    <div class="search-desc"><span class="desc-child-part">${escHtml(entry.description)}</span></div>
+    <div class="search-meta">
+      ${entry.parent ? `<span class="search-category-tag">↑ ${escHtml(entry.parent)}</span>` : ''}
+      ${scoreHtml}
+    </div>
+    ${expandHtml}
+  </div>`;
+}
+
+function cipiSectionHtml(results) {
+  const max = results.reduce((m, r) => Math.max(m, r.score ?? 0), 0);
+  let html = `<div class="search-section" style="margin-top:1rem">
+    <div class="search-section-header">
+      <span class="search-section-title" style="color:#7c3aed">CIPI</span>
+      <span class="search-count-badge" style="background:#ede9fe;color:#5b21b6">${results.length} risultati</span>
+    </div>`;
+  if (results.length) {
+    results.forEach(r => {
+      // API may wrap in {entry, score} or return flat object
+      const e = r.entry || r;
+      html += cipiCardHtml(e, r.score, max);
+    });
+  } else {
+    html += '<p style="color:#718096;font-size:.85rem;padding:.5rem 0">Nessun risultato.</p>';
+  }
+  return html + '</div>';
+}
+
+function renderCIPIResults(results, containerId) {
+  document.getElementById(containerId).innerHTML = cipiSectionHtml(results);
+}
+
+/* ── CIPI PANEL ──────────────────────────────────────────────────────── */
+function setCIPISearch(q) {
+  document.getElementById('cipi-search-q').value = q;
+  switchTab('cipi');
+  doCIPISearch();
+}
+
+async function doCIPISearch() {
+  const q    = document.getElementById('cipi-search-q').value.trim();
+  const type = document.getElementById('cipi-search-type').value;
+  const out  = document.getElementById('result-cipi');
+  if (!q) { out.innerHTML = '<p style="color:#e53e3e">Inserisci un testo.</p>'; return; }
+
+  out.innerHTML = '<p style="color:#718096">Ricerca…</p>';
+  try {
+    let url = `${BASE}/search?q=${encodeURIComponent(q)}&version=cipi`;
+    if (type) url += `&cipi_type=${encodeURIComponent(type)}`;
+    const data = await apiFetch(url);
+    renderCIPIResults(data.cipi_results || [], 'result-cipi');
+  } catch(e) {
+    out.innerHTML = `<p style="color:#e53e3e">${escHtml(e.message)}</p>`;
+  }
+}
+
+function setCIPIExpand(code) {
+  document.getElementById('cipi-exp-code').value = code;
+  switchTab('cipi');
+  doCIPIExpand();
+}
+
+async function doCIPIExpand() {
+  const code = document.getElementById('cipi-exp-code').value.trim();
+  const out  = document.getElementById('result-cipi');
+  out.innerHTML = '<p style="color:#718096">Caricamento…</p>';
+  try {
+    let data;
+    if (code) {
+      data = await apiFetch(`${BASE}/cipi/${encodeURIComponent(code)}/expand`);
+    } else {
+      const list = await apiFetch(`${BASE}/cipi?type=chapter&limit=100`);
+      data = { parent: { code: '', description: 'Tutti i capitoli CIPI', type: 'root' }, children: list.items || [] };
+    }
+    let html = `<div class="card">`;
+    if (data.parent.code) {
+      html += `<div style="margin-bottom:.75rem;padding-bottom:.6rem;border-bottom:2px solid #ede9fe">
+        <span style="font-size:1.1rem;font-weight:800;color:#7c3aed;font-family:monospace">${escHtml(data.parent.code)}</span>
+        ${cipiTypeBadge(data.parent.type)}
+        <span style="font-size:.9rem;color:#553c9a;margin-left:.4rem">${escHtml(data.parent.description)}</span>
+      </div>`;
+    } else {
+      html += `<div style="margin-bottom:.6rem;font-size:.88rem;font-weight:700;color:#7c3aed">Tutti i capitoli CIPI</div>`;
+    }
+    const children = data.children || [];
+    if (!children.length) {
+      html += '<p style="color:#718096;font-size:.85rem">Nessuna sottoclasse disponibile (codice foglia / codificante).</p>';
+    } else {
+      html += `<div style="font-size:.78rem;color:#718096;margin-bottom:.5rem">${children.length} voci</div>`;
+      children.forEach(c => {
+        const expandBtn = c.type !== 'procedura'
+          ? `<button class="expand-parent-btn" style="margin-left:auto;flex-shrink:0" onclick="setCIPIExpand('${escHtml(c.code)}')">&#x25B6;</button>`
+          : '';
+        html += `<div class="expand-child-row" style="align-items:center">
+          <span class="expand-child-code" style="min-width:5.5rem">${escHtml(c.code)}</span>
+          ${cipiTypeBadge(c.type)}
+          <span class="expand-child-desc-text" style="margin-left:.35rem;flex:1">${escHtml(c.description)}</span>
+          ${expandBtn}
+        </div>`;
+      });
+    }
+    html += '</div>';
+    out.innerHTML = html;
+  } catch(e) {
+    out.innerHTML = `<p style="color:#e53e3e">${escHtml(e.message)}</p>`;
+  }
 }
 
 /* ── LIST ──────────────────────────────────────────────────── */
@@ -1104,6 +1376,7 @@ document.addEventListener('keydown', e => {
     if (active.id === 'panel-convert') doConvert();
     if (active.id === 'panel-search')  doSearch();
     if (active.id === 'panel-infer')   doSemanticSearch();
+    if (active.id === 'panel-cipi')    doCIPISearch();
   }
 });
 
