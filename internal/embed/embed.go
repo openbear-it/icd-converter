@@ -11,6 +11,7 @@ import (
 	"log"
 	"math"
 	"sort"
+	"strings"
 
 	"icd-converter/internal/icd"
 
@@ -66,6 +67,80 @@ func (idx *Index) Search(query []float32, topN int) []SearchResult {
 		out[i] = SearchResult{ICDEntry: idx.entries[cands[i].idx], Score: cands[i].score}
 	}
 	return out
+}
+
+// MultiQuerySearch splits text into clauses, embeds each one independently, and
+// merges results by summing cosine scores across queries (Reciprocal Score Fusion
+// lite). It returns at most topN results sorted by combined score.
+// queryVecs must be pre-computed by the caller (one vector per clause).
+func (idx *Index) MultiQuerySearch(queryVecs [][]float32, topN int) []SearchResult {
+	if len(queryVecs) == 0 {
+		return nil
+	}
+	scores := make([]float64, len(idx.entries))
+	for _, qv := range queryVecs {
+		for i, v := range idx.vecs {
+			scores[i] += cosine(qv, v)
+		}
+	}
+	// Normalise by number of queries so score stays in [0,1]-ish range.
+	n := float64(len(queryVecs))
+	type candidate struct {
+		idx   int
+		score float64
+	}
+	cands := make([]candidate, len(idx.entries))
+	for i, s := range scores {
+		cands[i] = candidate{i, s / n}
+	}
+	sort.Slice(cands, func(a, b int) bool { return cands[a].score > cands[b].score })
+	if topN > len(cands) {
+		topN = len(cands)
+	}
+	out := make([]SearchResult, topN)
+	for i := 0; i < topN; i++ {
+		out[i] = SearchResult{ICDEntry: idx.entries[cands[i].idx], Score: cands[i].score}
+	}
+	return out
+}
+
+// SplitClinicalText splits a clinical text into meaningful clauses suitable for
+// multi-query embedding. Sentences and comma-separated phrases longer than
+// minLen characters are kept; very short fragments are discarded.
+// If the text is short (≤ shortTextThreshold chars) it is returned as-is.
+func SplitClinicalText(text string, minLen int) []string {
+	const shortTextThreshold = 80
+	text = strings.TrimSpace(text)
+	if len(text) <= shortTextThreshold {
+		return []string{text}
+	}
+	// Split on sentence-ending punctuation and semicolons first, then commas.
+	raw := strings.FieldsFunc(text, func(r rune) bool {
+		return r == '.' || r == ';' || r == '\n'
+	})
+	var chunks []string
+	for _, part := range raw {
+		part = strings.TrimSpace(part)
+		if len(part) < minLen {
+			continue
+		}
+		// Further split long comma-phrases to avoid diluting meaning.
+		if len(part) > 120 {
+			sub := strings.Split(part, ",")
+			for _, s := range sub {
+				s = strings.TrimSpace(s)
+				if len(s) >= minLen {
+					chunks = append(chunks, s)
+				}
+			}
+		} else {
+			chunks = append(chunks, part)
+		}
+	}
+	if len(chunks) == 0 {
+		return []string{text}
+	}
+	return chunks
 }
 
 func cosine(a, b []float32) float64 {

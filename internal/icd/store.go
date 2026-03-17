@@ -1,6 +1,7 @@
 package icd
 
 import (
+	"math"
 	"strings"
 )
 
@@ -135,7 +136,7 @@ type CIPISearchResult struct {
 	Score float64 `json:"score"`
 }
 
-// SearchCIPI performs a case-insensitive keyword search over CIPI descriptions.
+// SearchCIPI performs a BM25 keyword search over CIPI descriptions.
 // An optional cipiType ("diagnosi" | "procedura") restricts the results; pass ""
 // to search all types.
 func (s *Store) SearchCIPI(query, cipiType string) []CIPISearchResult {
@@ -143,24 +144,7 @@ func (s *Store) SearchCIPI(query, cipiType string) []CIPISearchResult {
 	if len(tokens) == 0 {
 		return nil
 	}
-	var results []CIPISearchResult
-	for _, e := range s.cipiList {
-		if cipiType != "" && e.Type != cipiType {
-			continue
-		}
-		desc := strings.ToLower(e.Description)
-		score := scoreEntry(desc, strings.ToLower(e.Code), tokens)
-		if score > 0 {
-			results = append(results, CIPISearchResult{CIPIEntry: e, Score: score})
-		}
-	}
-	// Sort descending by score.
-	for i := 1; i < len(results); i++ {
-		for j := i; j > 0 && results[j].Score > results[j-1].Score; j-- {
-			results[j], results[j-1] = results[j-1], results[j]
-		}
-	}
-	return results
+	return bm25CIPI(s.cipiList, tokens, cipiType)
 }
 
 // ChildrenICD9 returns all ICD-9 entries whose code is a direct or indirect
@@ -187,24 +171,78 @@ func childrenOf(list []ICDEntry, prefix string) []ICDEntry {
 	return results
 }
 
-// searchEntries scores entries against a multi-word query.
-// Scoring: +2 per token that is a prefix of a description word, +1 per token contained anywhere.
+// searchEntries scores entries against a multi-word query using BM25.
+// The corpus statistics (avgdl, idf) are computed on the fly from the given slice.
+// A small code-match bonus is added on top so that exact code searches rank first.
 func searchEntries(entries []ICDEntry, query string) []SearchResult {
 	tokens := tokenize(query)
 	if len(tokens) == 0 {
 		return nil
 	}
 
+	// Build per-document term frequency maps and compute avgdl.
+	type docFields struct {
+		descTokens []string
+		tf         map[string]int
+	}
+	docs := make([]docFields, len(entries))
+	var totalLen int
+	for i, e := range entries {
+		words := tokenize(e.Description)
+		tf := make(map[string]int, len(words))
+		for _, w := range words {
+			tf[w]++
+		}
+		docs[i] = docFields{descTokens: words, tf: tf}
+		totalLen += len(words)
+	}
+	N := len(entries)
+	avgdl := 1.0
+	if N > 0 {
+		avgdl = float64(totalLen) / float64(N)
+	}
+
+	// BM25 parameters (standard tuning).
+	const k1 = 1.5
+	const b = 0.75
+
+	// Document frequency per query token.
+	df := make(map[string]int, len(tokens))
+	for _, tok := range tokens {
+		for _, d := range docs {
+			if d.tf[tok] > 0 {
+				df[tok]++
+			}
+		}
+	}
+
+	// Score each document.
 	var results []SearchResult
-	for _, e := range entries {
-		desc := strings.ToLower(e.Description)
-		score := scoreEntry(desc, strings.ToLower(e.Code), tokens)
+	for i, e := range entries {
+		d := docs[i]
+		dl := float64(len(d.descTokens))
+		var score float64
+		for _, tok := range tokens {
+			tfVal := float64(d.tf[tok])
+			if tfVal == 0 {
+				continue
+			}
+			idf := math.Log((float64(N)-float64(df[tok])+0.5)/(float64(df[tok])+0.5) + 1)
+			score += idf * (tfVal * (k1 + 1)) / (tfVal + k1*(1-b+b*dl/avgdl))
+		}
+		// Code-match bonus: exact or prefix match on the code string.
+		codeLower := strings.ToLower(e.Code)
+		for _, tok := range tokens {
+			if strings.HasPrefix(codeLower, tok) {
+				score += 5
+			}
+		}
 		if score > 0 {
 			results = append(results, SearchResult{ICDEntry: e, Score: score})
 		}
 	}
 
-	// Sort descending by score (simple insertion sort – data set is small).
+	// Sort descending by score.
 	for i := 1; i < len(results); i++ {
 		for j := i; j > 0 && results[j].Score > results[j-1].Score; j-- {
 			results[j], results[j-1] = results[j-1], results[j]
@@ -213,23 +251,78 @@ func searchEntries(entries []ICDEntry, query string) []SearchResult {
 	return results
 }
 
-func scoreEntry(desc, code string, tokens []string) float64 {
-	var score float64
+// bm25CIPI is the same BM25 logic applied to CIPIEntry slices.
+func bm25CIPI(entries []CIPIEntry, tokens []string, cipiType string) []CIPISearchResult {
+	type docFields struct {
+		words []string
+		tf    map[string]int
+	}
+	// Filter by type first so IDF is computed on the relevant subset.
+	var subset []CIPIEntry
+	for _, e := range entries {
+		if cipiType == "" || e.Type == cipiType {
+			subset = append(subset, e)
+		}
+	}
+	if len(subset) == 0 {
+		return nil
+	}
+
+	docs := make([]docFields, len(subset))
+	var totalLen int
+	for i, e := range subset {
+		words := tokenize(e.Description)
+		tf := make(map[string]int, len(words))
+		for _, w := range words {
+			tf[w]++
+		}
+		docs[i] = docFields{words: words, tf: tf}
+		totalLen += len(words)
+	}
+	N := len(subset)
+	avgdl := float64(totalLen) / float64(N)
+
+	const k1 = 1.5
+	const bParam = 0.75
+
+	df := make(map[string]int, len(tokens))
 	for _, tok := range tokens {
-		if strings.Contains(code, tok) {
-			score += 3
-		}
-		if strings.Contains(desc, tok) {
-			score += 2
-		}
-		// Partial word prefix bonus
-		for _, word := range strings.Fields(desc) {
-			if strings.HasPrefix(word, tok) {
-				score += 1
+		for _, d := range docs {
+			if d.tf[tok] > 0 {
+				df[tok]++
 			}
 		}
 	}
-	return score
+
+	var results []CIPISearchResult
+	for i, e := range subset {
+		d := docs[i]
+		dl := float64(len(d.words))
+		var score float64
+		for _, tok := range tokens {
+			tfVal := float64(d.tf[tok])
+			if tfVal == 0 {
+				continue
+			}
+			idf := math.Log((float64(N)-float64(df[tok])+0.5)/(float64(df[tok])+0.5) + 1)
+			score += idf * (tfVal * (k1 + 1)) / (tfVal + k1*(1-bParam+bParam*dl/avgdl))
+		}
+		codeLower := strings.ToLower(e.Code)
+		for _, tok := range tokens {
+			if strings.HasPrefix(codeLower, tok) {
+				score += 5
+			}
+		}
+		if score > 0 {
+			results = append(results, CIPISearchResult{CIPIEntry: e, Score: score})
+		}
+	}
+	for i := 1; i < len(results); i++ {
+		for j := i; j > 0 && results[j].Score > results[j-1].Score; j-- {
+			results[j], results[j-1] = results[j-1], results[j]
+		}
+	}
+	return results
 }
 
 func tokenize(s string) []string {

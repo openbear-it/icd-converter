@@ -121,24 +121,34 @@ func (h *Handler) SemanticSearch(c *gin.Context) {
 	log.Printf("search/semantic: mode=embedding model=%q version=%s limit=%d query=%q",
 		embedBuilder.ModelName(), version, limit, q)
 
-	queryVec, err := embedBuilder.EmbedOne(c.Request.Context(), q)
-	if err != nil {
-		log.Printf("search/semantic: ERROR embedding query=%q err=%v elapsed=%s",
-			q, err, time.Since(start).Round(time.Millisecond))
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "embedding failed: " + err.Error()})
-		return
+	// Split long clinical texts into clauses and embed each independently.
+	// For short queries a single embedding is used (same behaviour as before).
+	chunks := embed.SplitClinicalText(q, 10)
+	queryVecs := make([][]float32, 0, len(chunks))
+	for _, chunk := range chunks {
+		vec, err := embedBuilder.EmbedOne(c.Request.Context(), chunk)
+		if err != nil {
+			log.Printf("search/semantic: ERROR embedding chunk=%q err=%v elapsed=%s",
+				chunk, err, time.Since(start).Round(time.Millisecond))
+			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "embedding failed: " + err.Error()})
+			return
+		}
+		queryVecs = append(queryVecs, vec)
+	}
+	if len(chunks) > 1 {
+		log.Printf("search/semantic: multi-query mode chunks=%d", len(chunks))
 	}
 
 	var icd9Res, icd10Res, cipiRes []embed.SearchResult
 
 	if version != "icd10" && version != "cipi" && embedICD9 != nil {
-		icd9Res = embedICD9.Search(queryVec, limit)
+		icd9Res = embedICD9.MultiQuerySearch(queryVecs, limit)
 	}
 	if version != "icd9" && version != "cipi" && embedICD10 != nil {
-		icd10Res = embedICD10.Search(queryVec, limit)
+		icd10Res = embedICD10.MultiQuerySearch(queryVecs, limit)
 	}
 	if (version == "cipi" || version == "all" || version == "both") && embedCIPI != nil {
-		raw := embedCIPI.Search(queryVec, limit)
+		raw := embedCIPI.MultiQuerySearch(queryVecs, limit)
 		cipiRes = filterByCIPIType(raw, cipiType)
 	}
 
