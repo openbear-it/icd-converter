@@ -564,8 +564,10 @@
       <h2>Ricerca per Similitudine Semantica</h2>
       <p style="font-size:.83rem;color:#718096;margin-bottom:.8rem">
         Inserisci un testo clinico libero. Il sistema può operare in due modalità:<br>
-        <strong>Euristica</strong> — ricerca per parole chiave, sempre disponibile.<br>
-        <strong>Embedding</strong> — similarità vettoriale con modello AI (richiede <code>LLM_EMBED_MODEL</code>, es. <code>nomic-embed-text</code> via Ollama).
+        <strong>Euristica</strong> — ricerca per parole chiave BM25, sempre disponibile.<br>
+        <strong>Embedding</strong> — pipeline avanzata con modello AI (richiede <code>LLM_EMBED_MODEL</code>, es. <code>nomic-embed-text</code> via Ollama):
+        <strong>query expansion LLM</strong> (genera riformulazioni ICD-aligned della query), <strong>multi-query splitting</strong> (testi lunghi vengono spezzati in clausole embeddate separatamente)
+        e <strong>fusione ibrida RRF</strong> (embedding + BM25 combinati via Reciprocal Rank Fusion).
       </p>
       <div class="form-row">
         <div class="form-group" style="flex:1 1 100%;min-width:0">

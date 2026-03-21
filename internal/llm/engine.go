@@ -229,3 +229,52 @@ func stripCodeFences(s string) string {
 	s = strings.TrimSuffix(s, "```")
 	return strings.TrimSpace(s)
 }
+
+// ExpandQuery uses the LLM to generate alternative ICD-terminology-aligned
+// phrasings of a clinical query. This bridges the vocabulary gap between
+// free-text clinical descriptions and the formal ICD code descriptions.
+//
+// It returns 2-3 reformulations in the same language as the input query.
+// If no LLM is configured, it returns nil without error (caller should use
+// the original query only).
+func (e *Engine) ExpandQuery(ctx context.Context, query string) ([]string, error) {
+	if e.client == nil {
+		return nil, nil
+	}
+	timeout := time.Duration(e.cfg.TimeoutSeconds) * time.Second
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	systemPrompt := `Sei un esperto di codifica ICD clinica.
+Dato un testo clinico in input, genera fino a 3 riformulazioni alternative usando la terminologia medica ICD ufficiale italiana.
+Le riformulazioni devono catturare lo stesso concetto clinico con parole diverse per migliorare il recupero semantico.
+Rispondi SOLO con una lista di riformulazioni, una per riga, senza numerazione né testo aggiuntivo.`
+
+	resp, err := e.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+		Model: e.cfg.Model,
+		Messages: []openai.ChatCompletionMessage{
+			{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
+			{Role: openai.ChatMessageRoleUser, Content: query},
+		},
+		Temperature: 0.3,
+		MaxTokens:   120,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("ExpandQuery LLM error: %w", err)
+	}
+	if len(resp.Choices) == 0 {
+		return nil, nil
+	}
+	raw := strings.TrimSpace(resp.Choices[0].Message.Content)
+	var expansions []string
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		// Strip leading bullet/dash/number markers
+		line = strings.TrimLeft(line, "-•*123456789. ")
+		line = strings.TrimSpace(line)
+		if line != "" && line != query {
+			expansions = append(expansions, line)
+		}
+	}
+	return expansions, nil
+}

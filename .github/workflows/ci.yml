@@ -3,6 +3,7 @@ name: CI / Build & Push
 on:
   push:
     branches: [ "main" ]
+    tags:     [ "v*.*.*" ]
   pull_request:
     branches: [ "main" ]
 
@@ -26,7 +27,7 @@ jobs:
     - name: go test
       run: go test ./...
 
-  # ── Step 2: Docker build & push (only on push to main) ───────
+  # ── Step 2: Docker build & push (push to main OR version tag) ─
   docker:
     name: Docker build & push
     runs-on: ubuntu-latest
@@ -59,8 +60,14 @@ jobs:
       with:
         images: ghcr.io/${{ github.repository }}
         tags: |
-          type=sha,prefix=
-          type=raw,value=latest
+          # Branch push → latest + sha
+          type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+          type=sha,prefix=sha-,enable=${{ github.ref == 'refs/heads/main' }}
+          # Version tag (v1.2.3) → 1.2.3  +  1.2  +  1  +  sha
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=semver,pattern={{major}}
+          type=sha,prefix=sha-,enable=${{ startsWith(github.ref, 'refs/tags/') }}
 
     - name: Build and push (multi-arch)
       uses: docker/build-push-action@v6

@@ -1,9 +1,9 @@
 openapi: 3.0.3
 info:
   title: ICD Converter API
-  version: "1.1.0"
+  version: "1.2.0"
   description: >
-    API per la conversione e ricerca di codici ICD-9-CM ↔ ICD-10-IM e codici CIPI (nomenclatura italiana). Supporta lookup puntuale, conversione bidirezionale, espansione gerarchica, ricerca testuale full-text e ricerca per similarità semantica (embedding vettoriale o euristica).
+    API per la conversione e ricerca di codici ICD-9-CM ↔ ICD-10-IM e codici CIPI (nomenclatura italiana). Supporta lookup puntuale, conversione bidirezionale, espansione gerarchica, ricerca testuale full-text e ricerca per similarità semantica con pipeline avanzata: text enrichment dell'indice, query expansion LLM, multi-query splitting e fusione ibrida RRF (embedding + BM25).
 
 servers:
 - url: /api/v1
@@ -374,7 +374,24 @@ paths:
       tags: [ Ricerca ]
       summary: Ricerca per similarità semantica
       description: >
-        Ordina i codici ICD e CIPI per similarità semantica rispetto al testo clinico fornito. Usa embedding vettoriale (cosine similarity) se il modello è configurato, altrimenti cade in modalità euristica (keyword scoring).
+        Ordina i codici ICD e CIPI per similarità semantica rispetto al testo clinico fornito.
+        Quando `LLM_EMBED_MODEL` è configurato la ricerca usa una pipeline avanzata:
+
+        1. **Query expansion LLM** — se è configurato anche un modello chat (`OPENAI_API_KEY` + `LLM_MODEL`),
+           prima dell'embedding il testo viene inviato all'LLM che produce 2-3 riformulazioni usando
+           la terminologia ICD ufficiale italiana (bridging del divario lessicale tra linguaggio clinico
+           e terminologia formale).
+
+        2. **Multi-query splitting** — testi clinici lunghi (> 80 caratteri) vengono automaticamente
+           spezzati in clausole semanticamente coerenti (su `.` `;` `\n` e `,` per testi molto lunghi).
+           Ogni variante (originale + espansioni + clausole) viene embeddata separatamente.
+
+        3. **Fusione ibrida RRF** — i risultati dell'embedding vengono fusi con i risultati BM25
+           tramite Reciprocal Rank Fusion (k=60). Garantisce che i match esatti di termini tecnici
+           non vengano penalizzati dall'embedding, e che i concetti semantici emergano anche senza
+           corrispondenza testuale esatta.
+
+        Se `LLM_EMBED_MODEL` non è configurato, cade in modalità euristica (BM25 keyword scoring).
 
 
         Il campo `version` controlla le classificazioni incluse:

@@ -12,7 +12,7 @@ I dati provengono dalle fonti ufficiali del **Ministero della Salute italiano**:
 | Conversione ICD-10 → ICD-9 | Dato un codice ICD-10 restituisce i codici ICD-9 equivalenti |
 | Espansione gerarchica | Dato un codice padre restituisce tutti i sottocodici (ICD-9, ICD-10, CIPI) |
 | Ricerca testuale | Cerca codici per parola chiave in ICD-9, ICD-10 e/o CIPI (ranking BM25) |
-| Ricerca semantica | Similarità vettoriale (embedding) o BM25 euristica; testi clinici lunghi vengono spezzati automaticamente in clausole (multi-query) |
+| Ricerca semantica | Similarità vettoriale (embedding) con **text enrichment**, **query expansion LLM** e **fusione ibrida RRF** (embedding + BM25); fallback euristico quando l'embedding non è configurato |
 | CIPI lookup/esplorazione | Lookup puntuale, espansione gerarchica e lista paginata dei codici CIPI |
 | Lista / Paginazione | Esplora codici per versione e categoria con paginazione |
 | UI Web | Interfaccia HTML con tab: Converti, Ricerca, Similarità, Esplora, Info |
@@ -73,18 +73,37 @@ Il server parte su `http://localhost:8080`.
 
 ## Variabili di ambiente
 
+### Generali
+
 | Variabile | Default | Descrizione |
 |---|---|---|
 | `PORT` | `8080` | Porta HTTP |
 | `GIN_MODE` | `release` | `debug` per log verbose di Gin |
 | `ICD_DB_PATH` | `icd.db` | Percorso del database SQLite |
-| `LLM_EMBED_MODEL` | *(vuoto)* | Modello embedding. Se assente si usa la modalità euristica |
-| `LLM_EMBED_BASE_URL` | valore di `LLM_BASE_URL` | URL endpoint embedding (es. Ollama) |
+
+### LLM / Modello di linguaggio (chat)
+
+| Variabile | Default | Descrizione |
+|---|---|---|
+| `OPENAI_API_KEY` | *(vuoto)* | API key per l'endpoint OpenAI o compatibile (Ollama, LM Studio, ecc.). Con Ollama locale si può lasciare a `ollama` o qualsiasi stringa non vuota |
+| `LLM_BASE_URL` | endpoint OpenAI | URL base dell'endpoint compatibile OpenAI, es. `http://localhost:11434/v1` per Ollama |
+| `LLM_MODEL` | `gpt-4o-mini` | Modello chat usato per la **query expansion semantica**. Deve essere un modello in grado di generare testo (non un embedding model) |
+| `LLM_TIMEOUT` | `30` | Timeout in secondi per le chiamate al modello chat |
+
+### Embedding (ricerca semantica)
+
+| Variabile | Default | Descrizione |
+|---|---|---|
+| `LLM_EMBED_MODEL` | *(vuoto)* | Modello embedding. Se assente si usa la modalità BM25 euristica |
+| `LLM_EMBED_BASE_URL` | valore di `LLM_BASE_URL` | URL endpoint embedding (può differire dall'endpoint chat) |
 | `LLM_EMBED_API_KEY` | valore di `OPENAI_API_KEY` | API key per l'endpoint embedding |
+| `LLM_EMBED_ENRICH_TEXT` | `true` | Arricchisce il testo indicizzato con la categoria/capitolo ICD prima dell'embedding. Impostare `false` per disabilitare (usa un namespace di cache separato) |
 
 Modelli embedding consigliati (Ollama, ARM64-friendly):
 - `nomic-embed-text` — 768 dim, ~274 MB, migliore qualità
 - `all-minilm` — 384 dim, ~45 MB, minimo RAM, avvio rapido
+
+> **Nota**: `OPENAI_API_KEY` e `LLM_BASE_URL` configurano **sia** il modello chat (query expansion) **sia** l'embedding se non si impostano le varianti `LLM_EMBED_*` specifiche. Con Ollama tutto locale è sufficiente impostare `LLM_BASE_URL=http://localhost:11434/v1`, `OPENAI_API_KEY=ollama`, `LLM_MODEL=<modello-chat>`, `LLM_EMBED_MODEL=<modello-embed>`.
 
 ## API Reference
 
@@ -152,7 +171,13 @@ Il campo `mode` può essere:
 - `embedding` — solo vettoriale; restituisce 503 se il modello non è configurato
 - `heuristic` — sempre BM25 keyword scoring
 
-> **Multi-query automatico**: se `q` supera gli 80 caratteri il testo viene spezzato in clausole (su `.` `;` `\n` e `,` per frasi molto lunghe). Ogni clausola viene embeddata separatamente e i punteggi vengono sommati e normalizzati prima di restituire il top-N. Per query brevi il comportamento è identico alla versione precedente.
+> **Pipeline ricerca semantica avanzata**: quando sia `LLM_EMBED_MODEL` che un modello LLM chat sono configurati, la ricerca esegue tre passi aggiuntivi rispetto all'embedding diretto:
+>
+> 1. **Query expansion** — l'LLM genera 2–3 riformulazioni ICD-aligned della query originale in italiano (bridging del divario lessicale tra linguaggio clinico e terminologia ICD ufficiale).
+> 2. **Multi-query splitting** — ogni variante (originale + espansioni) superiore a 80 caratteri viene spezzata in clausole semanticamente coerenti su `.` `;` `\n` e `,`. L'intero insieme di vettori viene passato all'indice.
+> 3. **Fusione ibrida RRF** — i risultati dell'embedding vengono fusi con quelli BM25 tramite **Reciprocal Rank Fusion** ($k=60$): i codici che compaiono in entrambe le liste ottengono un punteggio più alto. Questo garantisce che corrispondenze esatte di termini tecnici non vengano penalizzate dall'embedding.
+>
+> Per query brevi senza LLM il comportamento è identico all'embedding singolo.
 
 Risposta:
 ```json
@@ -222,15 +247,37 @@ $$\text{score}(d,t) = \text{IDF}(t) \cdot \frac{tf \cdot (k_1 + 1)}{tf + k_1 \le
 
 I parametri usati sono i valori standard: $k_1 = 1.5$, $b = 0.75$.
 
-### Ricerca semantica — Multi-query splitting
+### Ricerca semantica — Pipeline avanzata
 
-Con un embedding singolo, un testo clinico lungo come:
+La ricerca semantica con embedding applica tre tecniche complementari:
+
+#### 1. Text enrichment sull'indice
+
+Ogni entry ICD nel database viene indicizzata come `"Descrizione. Categoria"` invece della sola descrizione foglia. Per esempio un codice ICD-10 come `I21.0` viene indicizzato come:
+
+> *"Infarto miocardico acuto transmural della parete anteriore. Malattie ischemiche del cuore"*
+
+Questo fornisce al modello di embedding il contesto del capitolo/blocco ICD, riducendo il divario tra linguaggio clinico e terminologia formale. I vettori arricchiti vengono salvati in un namespace di cache separato (`_enriched` suffix) per non invalidare cache precedenti.
+
+#### 2. LLM query expansion
+
+Quando un modello chat è configurato (`OPENAI_API_KEY` + `LLM_MODEL`), prima dell'embedding la query viene inviata all'LLM che produce 2–3 riformulazioni usando la terminologia ICD ufficiale italiana. Per esempio:
+
+```
+Query originale:  "infarto anteriore con sopraslivellamento ST"
+Espansioni LLM:   "Infarto miocardico acuto transmural della parete anteriore"
+                  "STEMI anteriore, occlusione arteria discendente anteriore"
+```
+
+Tutte le varianti (originale + espansioni) vengono embeddate e passate all'indice, coprendo più dello spazio vettoriale ICD.
+
+#### 3. Multi-query splitting
+
+Un testo clinico lungo come:
 
 > *"Paziente con BPCO in riacutizzazione, dispnea a riposo, SpO2 86%, FA rapida, BNP elevato"*
 
-produce **un solo vettore** che è la media di tutti i concetti. I concetti minoritari vengono diluiti da quelli più frequenti nel training del modello.
-
-L'approccio multi-query spezza automaticamente il testo in clausole semanticamente coerenti (separatori: `.` `;` `\n`, e `,` per frasi molto lunghe):
+viene spezzato in clausole semanticamente coerenti (separatori: `.` `;` `\n`, e `,` per frasi > 120 caratteri):
 
 ```
 ["Paziente con BPCO in riacutizzazione",
@@ -240,7 +287,15 @@ L'approccio multi-query spezza automaticamente il testo in clausole semanticamen
  "BNP elevato"]
 ```
 
-Ogni clausola viene embeddata separatamente. Per ogni codice nel database si ottengono N punteggi coseno (uno per clausola), sommati e normalizzati. È una forma semplificata di **Reciprocal Score Fusion**: un codice rilevante anche per una sola clausola emerge nel ranking invece di essere sepolto dalla media. Per query brevi (≤ 80 caratteri) il comportamento è identico all'embedding singolo, senza overhead.
+Ciascuna clausola è embeddata separatamente; i punteggi coseno vengono sommati e normalizzati. Un codice rilevante per anche solo una clausola emerge nel ranking invece di essere sepolto dalla media.
+
+#### 4. Fusione ibrida RRF (Reciprocal Rank Fusion)
+
+I risultati dell'embedding vengono fusi con quelli BM25 usando la formula RRF standard (Cormack et al. 2009):
+
+$$\text{score}_{\text{RRF}}(d) = \sum_{l \in \{\text{embed},\, \text{bm25}\}} \frac{1}{k + \text{rank}_l(d)}$$
+
+con $k = 60$. I codici che compaiono in entrambe le liste ricevono un punteggio più alto. Questo garantisce che corrispondenze esatte di termini tecnici non vengano penalizzate dall'embedding, e che concetti semantici non trovati dal keyword search emergano lo stesso.
 
 ## Dati CIPI
 

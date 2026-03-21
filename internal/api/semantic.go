@@ -3,11 +3,13 @@ package api
 import (
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
 	"icd-converter/internal/embed"
 	"icd-converter/internal/icd"
+	"icd-converter/internal/llm"
 
 	"github.com/gin-gonic/gin"
 )
@@ -20,12 +22,21 @@ var embedICD9 *embed.Index
 var embedICD10 *embed.Index
 var embedCIPI *embed.Index
 
+// semanticLLMEngine is an optional LLM engine used for query expansion.
+var semanticLLMEngine *llm.Engine
+
 // SetEmbedder injects the embedding builder and precomputed indexes.
 func SetEmbedder(builder *embed.Builder, icd9 *embed.Index, icd10 *embed.Index, cipi *embed.Index) {
 	embedBuilder = builder
 	embedICD9 = icd9
 	embedICD10 = icd10
 	embedCIPI = cipi
+}
+
+// SetSemanticLLMEngine injects the LLM engine used for query expansion in
+// semantic search. Pass nil to disable expansion.
+func SetSemanticLLMEngine(e *llm.Engine) {
+	semanticLLMEngine = e
 }
 
 // SemanticSearchResponse is returned by the semantic search endpoint.
@@ -121,11 +132,30 @@ func (h *Handler) SemanticSearch(c *gin.Context) {
 	log.Printf("search/semantic: mode=embedding model=%q version=%s limit=%d query=%q",
 		embedBuilder.ModelName(), version, limit, q)
 
+	// ── LLM query expansion ──────────────────────────────────────────────────
+	// Ask the LLM to generate ICD-aligned rephrasings of the clinical query.
+	// These variants are embedded alongside the original query so that the
+	// embedding search covers more of the ICD vocabulary space.
+	allQueries := []string{q}
+	if semanticLLMEngine != nil {
+		expansions, expErr := semanticLLMEngine.ExpandQuery(c.Request.Context(), q)
+		if expErr != nil {
+			log.Printf("search/semantic: query expansion failed (non-fatal): %v", expErr)
+		} else if len(expansions) > 0 {
+			log.Printf("search/semantic: query expansion produced %d variants", len(expansions))
+			allQueries = append(allQueries, expansions...)
+		}
+	}
+
 	// Split long clinical texts into clauses and embed each independently.
 	// For short queries a single embedding is used (same behaviour as before).
-	chunks := embed.SplitClinicalText(q, 10)
-	queryVecs := make([][]float32, 0, len(chunks))
-	for _, chunk := range chunks {
+	// All query variants (original + expanded) are included.
+	var queryTexts []string
+	for _, qv := range allQueries {
+		queryTexts = append(queryTexts, embed.SplitClinicalText(qv, 10)...)
+	}
+	queryVecs := make([][]float32, 0, len(queryTexts))
+	for _, chunk := range queryTexts {
 		vec, err := embedBuilder.EmbedOne(c.Request.Context(), chunk)
 		if err != nil {
 			log.Printf("search/semantic: ERROR embedding chunk=%q err=%v elapsed=%s",
@@ -135,21 +165,27 @@ func (h *Handler) SemanticSearch(c *gin.Context) {
 		}
 		queryVecs = append(queryVecs, vec)
 	}
-	if len(chunks) > 1 {
-		log.Printf("search/semantic: multi-query mode chunks=%d", len(chunks))
+	if len(queryTexts) > 1 {
+		log.Printf("search/semantic: multi-query mode queries=%d (original+expanded+chunks)", len(queryTexts))
 	}
 
 	var icd9Res, icd10Res, cipiRes []embed.SearchResult
 
 	if version != "icd10" && version != "cipi" && embedICD9 != nil {
-		icd9Res = embedICD9.MultiQuerySearch(queryVecs, limit)
+		embedRes := embedICD9.MultiQuerySearch(queryVecs, limit*2)
+		kwRes := heuristicToEmbedResults(h.store.SearchICD9(q), limit*2)
+		icd9Res = rrfMerge(embedRes, kwRes, limit)
 	}
 	if version != "icd9" && version != "cipi" && embedICD10 != nil {
-		icd10Res = embedICD10.MultiQuerySearch(queryVecs, limit)
+		embedRes := embedICD10.MultiQuerySearch(queryVecs, limit*2)
+		kwRes := heuristicToEmbedResults(h.store.SearchICD10(q), limit*2)
+		icd10Res = rrfMerge(embedRes, kwRes, limit)
 	}
 	if (version == "cipi" || version == "all" || version == "both") && embedCIPI != nil {
-		raw := embedCIPI.MultiQuerySearch(queryVecs, limit)
-		cipiRes = filterByCIPIType(raw, cipiType)
+		embedRaw := embedCIPI.MultiQuerySearch(queryVecs, limit*2)
+		embedRaw = filterByCIPIType(embedRaw, cipiType)
+		kwRaw := heuristicCIPIToEmbedResults(h.store.SearchCIPI(q, cipiType), limit*2)
+		cipiRes = rrfMerge(embedRaw, kwRaw, limit)
 	}
 
 	icd9Res = emptyIfNil(icd9Res)
@@ -244,4 +280,46 @@ func emptyIfNil(s []embed.SearchResult) []embed.SearchResult {
 		return []embed.SearchResult{}
 	}
 	return s
+}
+
+// rrfMerge combines two ranked result lists using Reciprocal Rank Fusion (RRF).
+// The RRF constant k=60 comes from Cormack et al. 2009 and is the standard value.
+// Results from both lists are merged; entries that appear in both lists receive
+// a higher combined score than entries that appear in only one.
+func rrfMerge(embedResults, kwResults []embed.SearchResult, limit int) []embed.SearchResult {
+	const k = 60.0
+	scores := make(map[string]float64)
+	byCode := make(map[string]embed.SearchResult)
+
+	for rank, r := range embedResults {
+		scores[r.Code] += 1.0 / (k + float64(rank+1))
+		byCode[r.Code] = r
+	}
+	for rank, r := range kwResults {
+		scores[r.Code] += 1.0 / (k + float64(rank+1))
+		if _, exists := byCode[r.Code]; !exists {
+			byCode[r.Code] = r
+		}
+	}
+
+	type cs struct {
+		code  string
+		score float64
+	}
+	merged := make([]cs, 0, len(scores))
+	for code, score := range scores {
+		merged = append(merged, cs{code, score})
+	}
+	sort.Slice(merged, func(i, j int) bool { return merged[i].score > merged[j].score })
+
+	if limit > len(merged) {
+		limit = len(merged)
+	}
+	out := make([]embed.SearchResult, limit)
+	for i, c := range merged[:limit] {
+		r := byCode[c.code]
+		r.Score = c.score
+		out[i] = r
+	}
+	return out
 }

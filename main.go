@@ -15,6 +15,7 @@ import (
 	"icd-converter/internal/db"
 	embedpkg "icd-converter/internal/embed"
 	"icd-converter/internal/icd"
+	"icd-converter/internal/llm"
 
 	"github.com/gin-gonic/gin"
 )
@@ -64,15 +65,33 @@ func main() {
 	log.Printf("ICD store loaded: %d ICD-9 codes, %d ICD-10 codes, %d CIPI codes",
 		len(store.AllICD9()), len(store.AllICD10()), len(store.AllCIPI()))
 
+	// ── LLM Engine (for inference and query expansion) ────────────────────────
+	llmModel := envOr("LLM_MODEL", "gpt-4o-mini")
+	var llmEngine *llm.Engine
+	if apiKey != "" || baseURL != "" {
+		llmEngine = llm.NewEngine(llm.Config{
+			APIKey:         apiKey,
+			BaseURL:        baseURL,
+			Model:          llmModel,
+			TimeoutSeconds: envOrInt("LLM_TIMEOUT", 30),
+		}, store)
+		log.Printf("LLM engine ready: model=%s", llmModel)
+	}
+
 	// ── Semantic Embedding Search ─────────────────────────────────────────────
 	embedModel := os.Getenv("LLM_EMBED_MODEL")
 	if embedModel != "" {
 		embedBaseURL := envOr("LLM_EMBED_BASE_URL", baseURL)
 		embedAPIKey := envOr("LLM_EMBED_API_KEY", apiKey)
+		// EnrichText adds category/chapter context to each indexed entry before
+		// embedding — this significantly improves semantic recall.
+		// Set LLM_EMBED_ENRICH_TEXT=false to disable (uses separate cache namespace).
+		enrichText := os.Getenv("LLM_EMBED_ENRICH_TEXT") != "false"
 		builder := embedpkg.NewBuilder(embedpkg.Config{
-			APIKey:  embedAPIKey,
-			BaseURL: embedBaseURL,
-			Model:   embedModel,
+			APIKey:     embedAPIKey,
+			BaseURL:    embedBaseURL,
+			Model:      embedModel,
+			EnrichText: enrichText,
 		})
 		versionID, err := db.GetActiveVersionID(sqldb)
 		if err != nil {
@@ -92,8 +111,13 @@ func main() {
 			log.Fatalf("embed cipi: %v", err)
 		}
 		api.SetEmbedder(builder, idx9, idx10, idxCIPI)
-		log.Printf("Semantic search ready: model=%s  icd9=%d  icd10=%d  cipi=%d vectors",
-			embedModel, idx9.Len(), idx10.Len(), idxCIPI.Len())
+		// Inject LLM engine for query expansion (requires a chat-capable model).
+		if llmEngine != nil {
+			api.SetSemanticLLMEngine(llmEngine)
+			log.Printf("Semantic query expansion enabled: expand_model=%s", llmModel)
+		}
+		log.Printf("Semantic search ready: model=%s  enrich=%v  icd9=%d  icd10=%d  cipi=%d vectors",
+			embedModel, enrichText, idx9.Len(), idx10.Len(), idxCIPI.Len())
 	} else {
 		log.Printf("Semantic search disabled (set LLM_EMBED_MODEL to enable, e.g. LLM_EMBED_MODEL=all-minilm)")
 	}

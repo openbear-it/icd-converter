@@ -28,6 +28,13 @@ type Config struct {
 	Model string
 	// BatchSize is the number of texts sent per API call (default 64).
 	BatchSize int
+	// EnrichText controls whether the indexed text is enriched with category and code
+	// context before embedding. When true the index text becomes
+	// "Description. Category" — this improves recall because the model has access to
+	// chapter/block context in addition to the leaf description.
+	// Enabling this uses a separate cache namespace ("_enriched" suffix) so it never
+	// collides with vectors computed in plain mode.
+	EnrichText bool
 }
 
 // SearchResult is an ICD entry paired with its cosine similarity score.
@@ -193,27 +200,38 @@ func (b *Builder) EmbedOne(ctx context.Context, text string) ([]float32, error) 
 // BuildOrLoad loads a cached Index from SQLite if all vectors are present,
 // otherwise computes them via the API and persists the result.
 func (b *Builder) BuildOrLoad(ctx context.Context, sqldb *sql.DB, versionID int64, icdType string, entries []icd.ICDEntry) (*Index, error) {
-	vecs, err := loadFromDB(sqldb, versionID, icdType, b.cfg.Model, entries)
+	cacheType := icdType
+	if b.cfg.EnrichText {
+		cacheType = icdType + "_enriched"
+	}
+	vecs, err := loadFromDB(sqldb, versionID, cacheType, b.cfg.Model, entries)
 	if err != nil {
-		log.Printf("embed: db load error for %s (%v) — will recompute", icdType, err)
+		log.Printf("embed: db load error for %s (%v) — will recompute", cacheType, err)
 	}
 	if vecs != nil {
-		log.Printf("embed: loaded %d cached vectors  type=%s  model=%s", len(vecs), icdType, b.cfg.Model)
+		log.Printf("embed: loaded %d cached vectors  type=%s  model=%s", len(vecs), cacheType, b.cfg.Model)
 		return &Index{entries: entries, vecs: vecs}, nil
 	}
 
-	log.Printf("embed: computing %d vectors  type=%s  model=%s …", len(entries), icdType, b.cfg.Model)
+	log.Printf("embed: computing %d vectors  type=%s  model=%s …", len(entries), cacheType, b.cfg.Model)
 	vecs, err = b.computeFull(ctx, icdType, entries)
 	if err != nil {
 		return nil, err
 	}
-	if err := saveToDB(sqldb, versionID, icdType, b.cfg.Model, entries, vecs); err != nil {
+	if err := saveToDB(sqldb, versionID, cacheType, b.cfg.Model, entries, vecs); err != nil {
 		log.Printf("embed: warning: could not cache vectors: %v", err)
 	}
 	return &Index{entries: entries, vecs: vecs}, nil
 }
 
 func (b *Builder) computeFull(ctx context.Context, icdType string, entries []icd.ICDEntry) ([][]float32, error) {
+	// Build a code→description lookup so we can enrich leaf entries with their
+	// parent category descriptions (e.g. ICD-10 leaf codes get their block label).
+	catByCode := make(map[string]string, len(entries))
+	for _, e := range entries {
+		catByCode[e.Code] = e.Description
+	}
+
 	all := make([][]float32, len(entries))
 	for start := 0; start < len(entries); start += b.cfg.BatchSize {
 		end := start + b.cfg.BatchSize
@@ -222,7 +240,7 @@ func (b *Builder) computeFull(ctx context.Context, icdType string, entries []icd
 		}
 		texts := make([]string, end-start)
 		for i, e := range entries[start:end] {
-			texts[i] = e.Description
+			texts[i] = entryText(e, catByCode, b.cfg.EnrichText)
 		}
 		vecs, err := b.embedBatch(ctx, texts)
 		if err != nil {
@@ -234,6 +252,25 @@ func (b *Builder) computeFull(ctx context.Context, icdType string, entries []icd
 		}
 	}
 	return all, nil
+}
+
+// entryText returns the text to embed for an ICD entry.
+// When enrich is true the category is appended (looked up from catByCode when it
+// looks like a code rather than a human-readable string).
+func entryText(e icd.ICDEntry, catByCode map[string]string, enrich bool) string {
+	if !enrich || e.Category == "" {
+		return e.Description
+	}
+	// Resolve the category: if it matches a known code use its description,
+	// otherwise use the raw category string (already human-readable for ICD-9 chapters).
+	catDesc := e.Category
+	if desc, ok := catByCode[e.Category]; ok {
+		catDesc = desc
+	}
+	if catDesc == e.Description {
+		return e.Description
+	}
+	return e.Description + ". " + catDesc
 }
 
 func (b *Builder) embedBatch(ctx context.Context, texts []string) ([][]float32, error) {
