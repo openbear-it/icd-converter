@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"strings"
 	"time"
@@ -121,7 +122,9 @@ Rules:
 
 	userMsg := "Clinical descriptions:\n" + strings.Join(req.Descriptions, "\n")
 
-	resp, err := e.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+	// Use streaming so the TCP connection stays alive as long as tokens arrive;
+	// the context deadline is the only hard limit (no response at all → timeout).
+	stream, err := e.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
 		Model: e.cfg.Model,
 		Messages: []openai.ChatCompletionMessage{
 			{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
@@ -132,11 +135,24 @@ Rules:
 	if err != nil {
 		return nil, fmt.Errorf("LLM API error: %w", err)
 	}
-	if len(resp.Choices) == 0 {
-		return nil, errors.New("LLM returned no choices")
+	defer stream.Close()
+
+	var rawBuf strings.Builder
+	for {
+		chunk, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			log.Printf("llm: stream error model=%q elapsed=%s err=%v", e.cfg.Model, time.Since(start).Round(time.Millisecond), err)
+			return nil, fmt.Errorf("LLM stream error: %w", err)
+		}
+		if len(chunk.Choices) > 0 {
+			rawBuf.WriteString(chunk.Choices[0].Delta.Content)
+		}
 	}
 
-	raw := strings.TrimSpace(resp.Choices[0].Message.Content)
+	raw := strings.TrimSpace(rawBuf.String())
 	// Strip potential markdown code fences
 	raw = stripCodeFences(raw)
 
@@ -241,15 +257,9 @@ func (e *Engine) ExpandQuery(ctx context.Context, query string) ([]string, error
 	if e.client == nil {
 		return nil, nil
 	}
-	timeout := time.Duration(e.cfg.TimeoutSeconds) * time.Second
-	// Cap expansion timeout at 30s: expansion is best-effort and runs concurrently
-	// with embedding. 30s accounts for slow hardware (e.g. OCI free-tier Ampere)
-	// while keeping the goroutine lifetime bounded.
-	if timeout > 30*time.Second {
-		timeout = 30 * time.Second
-	}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
+	// No internal timeout — the caller provides the deadline via ctx.
+	// Streaming keeps the TCP connection alive as long as tokens arrive;
+	// the only hard limit is complete silence (ctx deadline exceeded).
 	start := time.Now()
 
 	// Truncate the query: expansion only needs key clinical concepts.
@@ -269,7 +279,8 @@ func (e *Engine) ExpandQuery(ctx context.Context, query string) ([]string, error
 
 	log.Printf("llm/expand: calling model=%q query=%q", e.cfg.Model, expandQuery)
 
-	resp, err := e.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+	// Streaming — connection stays alive while the model generates tokens.
+	stream, err := e.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
 		Model: e.cfg.Model,
 		Messages: []openai.ChatCompletionMessage{
 			{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
@@ -282,11 +293,23 @@ func (e *Engine) ExpandQuery(ctx context.Context, query string) ([]string, error
 		log.Printf("llm/expand: ERROR model=%q elapsed=%s err=%v", e.cfg.Model, time.Since(start).Round(time.Millisecond), err)
 		return nil, fmt.Errorf("ExpandQuery LLM error: %w", err)
 	}
-	if len(resp.Choices) == 0 {
-		log.Printf("llm/expand: no choices returned model=%q elapsed=%s", e.cfg.Model, time.Since(start).Round(time.Millisecond))
-		return nil, nil
+	defer stream.Close()
+
+	var contentBuf strings.Builder
+	for {
+		chunk, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			log.Printf("llm/expand: stream error model=%q elapsed=%s err=%v", e.cfg.Model, time.Since(start).Round(time.Millisecond), err)
+			return nil, fmt.Errorf("ExpandQuery LLM error: %w", err)
+		}
+		if len(chunk.Choices) > 0 {
+			contentBuf.WriteString(chunk.Choices[0].Delta.Content)
+		}
 	}
-	content := resp.Choices[0].Message.Content
+	content := contentBuf.String()
 	// Strip <think>...</think> blocks produced by reasoning models (e.g. qwen3)
 	if idx := strings.LastIndex(content, "</think>"); idx != -1 {
 		content = content[idx+len("</think>"):]

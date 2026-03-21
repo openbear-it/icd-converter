@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"sort"
@@ -144,12 +145,18 @@ func (h *Handler) SemanticSearch(c *gin.Context) {
 		err error
 	}
 	var expCh chan expandResult
+	const expansionBudget = 30 * time.Second
+	var expCancel context.CancelFunc
 	if semanticLLMEngine != nil {
 		expCh = make(chan expandResult, 1)
+		var expCtx context.Context
+		expCtx, expCancel = context.WithTimeout(c.Request.Context(), expansionBudget)
 		go func() {
-			exp, err := semanticLLMEngine.ExpandQuery(c.Request.Context(), q)
+			// expCtx cancellation interrupts the stream if the budget is exceeded.
+			exp, err := semanticLLMEngine.ExpandQuery(expCtx, q)
 			expCh <- expandResult{exp, err}
 		}()
+		defer expCancel()
 	}
 
 	// Split long clinical texts into clauses and embed each independently.
@@ -167,17 +174,10 @@ func (h *Handler) SemanticSearch(c *gin.Context) {
 		queryVecs = append(queryVecs, vec)
 	}
 
-	// Collect expansion result using a time-budget deadline.
-	// Total allowed time for expansion is capped at 8s from request start.
-	// This matches the ExpandQuery timeout cap so that on slow hardware
-	// (e.g. OCI free-tier Ampere) we wait as long as the LLM is still working,
-	// while on fast hardware the response is immediate.
-	const expansionBudget = 30 * time.Second
+	// Wait for expansion: the expCtx deadline (30s from request start) will
+	// cancel the stream in the goroutine, which then sends an error to expCh.
+	// We also watch c.Request.Context().Done() for early client disconnection.
 	if expCh != nil {
-		deadline := time.Until(start.Add(expansionBudget))
-		if deadline <= 0 {
-			deadline = 0
-		}
 		select {
 		case res := <-expCh:
 			if res.err != nil {
@@ -196,8 +196,8 @@ func (h *Handler) SemanticSearch(c *gin.Context) {
 					}
 				}
 			}
-		case <-time.After(deadline):
-			log.Printf("search/semantic: query expansion budget (%s) exceeded, skipping", expansionBudget)
+		case <-c.Request.Context().Done():
+			log.Printf("search/semantic: request cancelled while waiting for query expansion")
 		}
 	}
 
