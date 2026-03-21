@@ -134,31 +134,29 @@ func (h *Handler) SemanticSearch(c *gin.Context) {
 		embedBuilder.ModelName(), version, limit, q)
 
 	// ── LLM query expansion ──────────────────────────────────────────────────
-	// Ask the LLM to generate ICD-aligned rephrasings of the clinical query.
-	// These variants are embedded alongside the original query so that the
-	// embedding search covers more of the ICD vocabulary space.
+	// Expansion runs concurrently with the original-query embedding so that a
+	// slow or unavailable LLM does not block the critical embedding path.
+	// After embedding the original query we give expansion a short grace window;
+	// if it hasn't finished by then we proceed without it (best-effort).
 	var expansions []string
-	allQueries := []string{q}
+	type expandResult struct {
+		exp []string
+		err error
+	}
+	var expCh chan expandResult
 	if semanticLLMEngine != nil {
-		var expErr error
-		expansions, expErr = semanticLLMEngine.ExpandQuery(c.Request.Context(), q)
-		if expErr != nil {
-			log.Printf("search/semantic: query expansion failed (non-fatal): %v", expErr)
-		} else if len(expansions) > 0 {
-			log.Printf("search/semantic: query expansion produced %d variants", len(expansions))
-			allQueries = append(allQueries, expansions...)
-		}
+		expCh = make(chan expandResult, 1)
+		go func() {
+			exp, err := semanticLLMEngine.ExpandQuery(c.Request.Context(), q)
+			expCh <- expandResult{exp, err}
+		}()
 	}
 
 	// Split long clinical texts into clauses and embed each independently.
 	// For short queries a single embedding is used (same behaviour as before).
-	// All query variants (original + expanded) are included.
-	var queryTexts []string
-	for _, qv := range allQueries {
-		queryTexts = append(queryTexts, embed.SplitClinicalText(qv, 10)...)
-	}
-	queryVecs := make([][]float32, 0, len(queryTexts))
-	for _, chunk := range queryTexts {
+	// Start with the original query only; expansions are appended below.
+	var queryVecs [][]float32
+	for _, chunk := range embed.SplitClinicalText(q, 10) {
 		vec, err := embedBuilder.EmbedOne(c.Request.Context(), chunk)
 		if err != nil {
 			log.Printf("search/semantic: ERROR embedding chunk=%q err=%v elapsed=%s",
@@ -168,8 +166,43 @@ func (h *Handler) SemanticSearch(c *gin.Context) {
 		}
 		queryVecs = append(queryVecs, vec)
 	}
-	if len(queryTexts) > 1 {
-		log.Printf("search/semantic: multi-query mode queries=%d (original+expanded+chunks)", len(queryTexts))
+
+	// Collect expansion result using a time-budget deadline.
+	// Total allowed time for expansion is capped at 8s from request start.
+	// This matches the ExpandQuery timeout cap so that on slow hardware
+	// (e.g. OCI free-tier Ampere) we wait as long as the LLM is still working,
+	// while on fast hardware the response is immediate.
+	const expansionBudget = 30 * time.Second
+	if expCh != nil {
+		deadline := time.Until(start.Add(expansionBudget))
+		if deadline <= 0 {
+			deadline = 0
+		}
+		select {
+		case res := <-expCh:
+			if res.err != nil {
+				log.Printf("search/semantic: query expansion failed (non-fatal): %v", res.err)
+			} else if len(res.exp) > 0 {
+				log.Printf("search/semantic: query expansion produced %d variants", len(res.exp))
+				expansions = res.exp
+				for _, expQ := range expansions {
+					for _, chunk := range embed.SplitClinicalText(expQ, 10) {
+						vec, err := embedBuilder.EmbedOne(c.Request.Context(), chunk)
+						if err != nil {
+							log.Printf("search/semantic: WARNING expansion embed failed chunk=%q err=%v", chunk, err)
+							continue
+						}
+						queryVecs = append(queryVecs, vec)
+					}
+				}
+			}
+		case <-time.After(deadline):
+			log.Printf("search/semantic: query expansion budget (%s) exceeded, skipping", expansionBudget)
+		}
+	}
+
+	if len(queryVecs) > 1 {
+		log.Printf("search/semantic: multi-query mode queries=%d (original+expanded+chunks)", len(queryVecs))
 	}
 
 	var icd9Res, icd10Res, cipiRes []embed.SearchResult

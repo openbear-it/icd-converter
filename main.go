@@ -74,7 +74,7 @@ func main() {
 			APIKey:         apiKey,
 			BaseURL:        baseURL,
 			Model:          llmModel,
-			TimeoutSeconds: envOrInt("LLM_TIMEOUT", 30),
+			TimeoutSeconds: envOrInt("LLM_TIMEOUT", 60),
 		}, store)
 		log.Printf("LLM engine ready: model=%s base_url=%q", llmModel, baseURL)
 		// Pre-warm: ask Ollama to load the model into memory now, so the first

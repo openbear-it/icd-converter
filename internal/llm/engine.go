@@ -242,10 +242,11 @@ func (e *Engine) ExpandQuery(ctx context.Context, query string) ([]string, error
 		return nil, nil
 	}
 	timeout := time.Duration(e.cfg.TimeoutSeconds) * time.Second
-	// Cap expansion timeout at 15s: expansion is best-effort and must not block
-	// the full search request for too long.
-	if timeout > 15*time.Second {
-		timeout = 15 * time.Second
+	// Cap expansion timeout at 30s: expansion is best-effort and runs concurrently
+	// with embedding. 30s accounts for slow hardware (e.g. OCI free-tier Ampere)
+	// while keeping the goroutine lifetime bounded.
+	if timeout > 30*time.Second {
+		timeout = 30 * time.Second
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
