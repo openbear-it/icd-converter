@@ -246,6 +246,31 @@ func stripCodeFences(s string) string {
 	return strings.TrimSpace(s)
 }
 
+// isICDCodePrefix reports whether s starts with an ICD code pattern:
+// 1–2 uppercase ASCII letters immediately followed by a digit
+// (e.g. "I11.0", "G45", "A01.2", "Z80.3 - ...")
+func isICDCodePrefix(s string) bool {
+	if len(s) < 2 {
+		return false
+	}
+	letters := 0
+	for _, c := range s {
+		if c >= 'A' && c <= 'Z' {
+			letters++
+		} else {
+			break
+		}
+	}
+	if letters == 0 || letters > 2 {
+		return false
+	}
+	if len(s) <= letters {
+		return false
+	}
+	next := rune(s[letters])
+	return next >= '0' && next <= '9'
+}
+
 // ExpandQuery uses the LLM to generate alternative ICD-terminology-aligned
 // phrasings of a clinical query. This bridges the vocabulary gap between
 // free-text clinical descriptions and the formal ICD code descriptions.
@@ -275,7 +300,16 @@ func (e *Engine) ExpandQuery(ctx context.Context, query string) ([]string, error
 		expandQuery = truncated + "…"
 	}
 
-	systemPrompt := `Sei un codificatore ICD esperto. Devi identificare la diagnosi principale nel testo clinico e scrivere SOLO 2-3 sinonimi ICD italiani di QUELLA diagnosi principale, uno per riga, senza titoli, senza asterischi, senza codici, senza testo extra. Solo frasi diagnostiche brevi.`
+	systemPrompt := `Sei un codificatore ICD esperto. Identifica la diagnosi principale nel testo clinico e scrivi SOLO 2-3 sinonimi diagnostici italiani, uno per riga.
+Regole ASSOLUTE:
+- NIENTE codici ICD (niente lettere seguite da numeri come I10, G45, Z80)
+- NIENTE trattini seguiti da codici
+- Solo frasi diagnostiche brevi in italiano
+- Niente titoli, asterischi, numeri, punteggiatura finale
+Esempio output corretto:
+ictus ischemico acuto
+infarto cerebrale da cardioembolia
+accidente cerebrovascolare ischemico`
 
 	log.Printf("llm/expand: calling model=%q query=%q", e.cfg.Model, expandQuery)
 
@@ -287,7 +321,7 @@ func (e *Engine) ExpandQuery(ctx context.Context, query string) ([]string, error
 			{Role: openai.ChatMessageRoleUser, Content: expandQuery},
 		},
 		Temperature: 0.3,
-		MaxTokens:   80,
+		MaxTokens:   100,
 	})
 	if err != nil {
 		log.Printf("llm/expand: ERROR model=%q elapsed=%s err=%v", e.cfg.Model, time.Since(start).Round(time.Millisecond), err)
@@ -347,6 +381,21 @@ func (e *Engine) ExpandQuery(ctx context.Context, query string) ([]string, error
 		}
 		if digitGroups >= 2 {
 			continue
+		}
+		// Reject lines that start with an ICD code pattern:
+		// 1-2 uppercase letters followed immediately by digits (e.g. I11.0, G45, A01.2)
+		if isICDCodePrefix(line) {
+			continue
+		}
+		// Strip a trailing " - <description>" that follows a code prefix the
+		// model placed mid-line (e.g. after a bullet was already stripped).
+		if idx := strings.Index(line, " - "); idx > 0 {
+			candidate := strings.TrimSpace(line[idx+3:])
+			if !isICDCodePrefix(candidate) && len([]rune(candidate)) >= 5 {
+				line = candidate
+			} else {
+				continue
+			}
 		}
 		expansions = append(expansions, line)
 	}
