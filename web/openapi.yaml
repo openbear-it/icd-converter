@@ -374,8 +374,7 @@ paths:
       tags: [ Ricerca ]
       summary: Ricerca per similarità semantica
       description: >
-        Ordina i codici ICD e CIPI per similarità semantica rispetto al testo clinico fornito.
-        Quando `LLM_EMBED_MODEL` è configurato la ricerca usa una pipeline avanzata:
+        Ordina i codici ICD e CIPI per similarità semantica rispetto al testo clinico fornito. Quando `LLM_EMBED_MODEL` è configurato la ricerca usa una pipeline avanzata:
 
         1. **Query expansion LLM** — se è configurato anche un modello chat (`OPENAI_API_KEY` + `LLM_MODEL`),
            prima dell'embedding il testo viene inviato all'LLM che produce 2-3 riformulazioni usando
