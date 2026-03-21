@@ -244,11 +244,14 @@ func (e *Engine) ExpandQuery(ctx context.Context, query string) ([]string, error
 	timeout := time.Duration(e.cfg.TimeoutSeconds) * time.Second
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	start := time.Now()
 
 	systemPrompt := `Sei un esperto di codifica ICD clinica.
 Dato un testo clinico in input, genera fino a 3 riformulazioni alternative usando la terminologia medica ICD ufficiale italiana.
 Le riformulazioni devono catturare lo stesso concetto clinico con parole diverse per migliorare il recupero semantico.
 Rispondi SOLO con una lista di riformulazioni, una per riga, senza numerazione né testo aggiuntivo.`
+
+	log.Printf("llm/expand: calling model=%q query=%q", e.cfg.Model, query)
 
 	resp, err := e.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
 		Model: e.cfg.Model,
@@ -260,12 +263,15 @@ Rispondi SOLO con una lista di riformulazioni, una per riga, senza numerazione n
 		MaxTokens:   120,
 	})
 	if err != nil {
+		log.Printf("llm/expand: ERROR model=%q elapsed=%s err=%v", e.cfg.Model, time.Since(start).Round(time.Millisecond), err)
 		return nil, fmt.Errorf("ExpandQuery LLM error: %w", err)
 	}
 	if len(resp.Choices) == 0 {
+		log.Printf("llm/expand: no choices returned model=%q elapsed=%s", e.cfg.Model, time.Since(start).Round(time.Millisecond))
 		return nil, nil
 	}
 	raw := strings.TrimSpace(resp.Choices[0].Message.Content)
+	log.Printf("llm/expand: response model=%q elapsed=%s raw=%q", e.cfg.Model, time.Since(start).Round(time.Millisecond), raw)
 	var expansions []string
 	for _, line := range strings.Split(raw, "\n") {
 		line = strings.TrimSpace(line)
@@ -276,5 +282,6 @@ Rispondi SOLO con una lista di riformulazioni, una per riga, senza numerazione n
 			expansions = append(expansions, line)
 		}
 	}
+	log.Printf("llm/expand: done expansions=%d %v", len(expansions), expansions)
 	return expansions, nil
 }

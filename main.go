@@ -75,7 +75,9 @@ func main() {
 			Model:          llmModel,
 			TimeoutSeconds: envOrInt("LLM_TIMEOUT", 30),
 		}, store)
-		log.Printf("LLM engine ready: model=%s", llmModel)
+		log.Printf("LLM engine ready: model=%s base_url=%q", llmModel, baseURL)
+	} else {
+		log.Printf("LLM engine disabled: set OPENAI_API_KEY (+ LLM_BASE_URL for Ollama) and LLM_MODEL to enable query expansion")
 	}
 
 	// ── Semantic Embedding Search ─────────────────────────────────────────────
