@@ -1178,8 +1178,15 @@ async function doSemanticSearch() {
     const icd9  = data.icd9_results  || [];
     const icd10 = data.icd10_results || [];
     const cipi  = data.cipi_results  || [];
+    const expansions = data.expansion_queries || [];
+    const expansionHtml = expansions.length > 0
+      ? `<div style="margin-top:.45rem;padding-top:.4rem;border-top:1px solid #e2e8f0">
+          <small style="color:#718096;font-weight:700">Riformulazioni LLM (${expansions.length}):</small>
+          ${expansions.map(e => `<span style="display:inline-block;margin:.15rem .2rem;padding:.15rem .55rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:20px;font-size:.75rem;color:#166534">${escHtml(e)}</span>`).join('')}
+        </div>` : '';
     out.innerHTML = `<div class="card" style="padding:.6rem 1rem;margin-bottom:.75rem">
       <small style="color:#718096">Modalità: <strong>${modeLabel}</strong> · query: <em>${escHtml(data.query)}</em></small>
+      ${expansionHtml}
     </div><div id="result-infer-grid"></div>`;
     const grid = document.getElementById('result-infer-grid');
     if (ver === 'cipi') {

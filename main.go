@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"icd-converter/internal/api"
 	"icd-converter/internal/db"
@@ -33,7 +34,7 @@ func main() {
 	port   := envOr("PORT", "8080")
 	dbPath := envOr("ICD_DB_PATH", "icd.db")
 	baseURL := os.Getenv("LLM_BASE_URL")
-	apiKey  := os.Getenv("OPENAI_API_KEY")
+	apiKey  := os.Getenv("LLM_API_KEY")
 
 	// ── Database: open, migrate schema, seed on first run ────────────────────
 	sqldb, err := db.Open(dbPath)
@@ -76,6 +77,15 @@ func main() {
 			TimeoutSeconds: envOrInt("LLM_TIMEOUT", 30),
 		}, store)
 		log.Printf("LLM engine ready: model=%s base_url=%q", llmModel, baseURL)
+		// Pre-warm: ask Ollama to load the model into memory now, so the first
+		// real expansion request doesn't pay the cold-start penalty (~10-15s).
+		go func() {
+			wctx, wcancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer wcancel()
+			if _, err := llmEngine.ExpandQuery(wctx, "warm-up"); err == nil {
+				log.Printf("LLM model warm-up done: model=%s", llmModel)
+			}
+		}()
 	} else {
 		log.Printf("LLM engine disabled: set OPENAI_API_KEY (+ LLM_BASE_URL for Ollama) and LLM_MODEL to enable query expansion")
 	}

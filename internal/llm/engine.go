@@ -242,25 +242,40 @@ func (e *Engine) ExpandQuery(ctx context.Context, query string) ([]string, error
 		return nil, nil
 	}
 	timeout := time.Duration(e.cfg.TimeoutSeconds) * time.Second
+	// Cap expansion timeout at 15s: expansion is best-effort and must not block
+	// the full search request for too long.
+	if timeout > 15*time.Second {
+		timeout = 15 * time.Second
+	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	start := time.Now()
 
-	systemPrompt := `Sei un esperto di codifica ICD clinica.
-Dato un testo clinico in input, genera fino a 3 riformulazioni alternative usando la terminologia medica ICD ufficiale italiana.
-Le riformulazioni devono catturare lo stesso concetto clinico con parole diverse per migliorare il recupero semantico.
-Rispondi SOLO con una lista di riformulazioni, una per riga, senza numerazione né testo aggiuntivo.`
+	// Truncate the query: expansion only needs key clinical concepts.
+	// Long free-text causes reasoning models to spend all tokens on thinking.
+	expandQuery := query
+	const maxQueryRunes = 250
+	if runes := []rune(query); len(runes) > maxQueryRunes {
+		// Truncate at last space within limit to avoid cutting mid-word
+		truncated := string(runes[:maxQueryRunes])
+		if idx := strings.LastIndex(truncated, " "); idx > 0 {
+			truncated = truncated[:idx]
+		}
+		expandQuery = truncated + "…"
+	}
 
-	log.Printf("llm/expand: calling model=%q query=%q", e.cfg.Model, query)
+	systemPrompt := `Sei un codificatore ICD esperto. Devi identificare la diagnosi principale nel testo clinico e scrivere SOLO 2-3 sinonimi ICD italiani di QUELLA diagnosi principale, uno per riga, senza titoli, senza asterischi, senza codici, senza testo extra. Solo frasi diagnostiche brevi.`
+
+	log.Printf("llm/expand: calling model=%q query=%q", e.cfg.Model, expandQuery)
 
 	resp, err := e.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
 		Model: e.cfg.Model,
 		Messages: []openai.ChatCompletionMessage{
 			{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
-			{Role: openai.ChatMessageRoleUser, Content: query},
+			{Role: openai.ChatMessageRoleUser, Content: expandQuery},
 		},
 		Temperature: 0.3,
-		MaxTokens:   120,
+		MaxTokens:   80,
 	})
 	if err != nil {
 		log.Printf("llm/expand: ERROR model=%q elapsed=%s err=%v", e.cfg.Model, time.Since(start).Round(time.Millisecond), err)
@@ -270,17 +285,46 @@ Rispondi SOLO con una lista di riformulazioni, una per riga, senza numerazione n
 		log.Printf("llm/expand: no choices returned model=%q elapsed=%s", e.cfg.Model, time.Since(start).Round(time.Millisecond))
 		return nil, nil
 	}
-	raw := strings.TrimSpace(resp.Choices[0].Message.Content)
+	content := resp.Choices[0].Message.Content
+	// Strip <think>...</think> blocks produced by reasoning models (e.g. qwen3)
+	if idx := strings.LastIndex(content, "</think>"); idx != -1 {
+		content = content[idx+len("</think>"):]
+	}
+	raw := strings.TrimSpace(content)
 	log.Printf("llm/expand: response model=%q elapsed=%s raw=%q", e.cfg.Model, time.Since(start).Round(time.Millisecond), raw)
 	var expansions []string
 	for _, line := range strings.Split(raw, "\n") {
 		line = strings.TrimSpace(line)
 		// Strip leading bullet/dash/number markers
 		line = strings.TrimLeft(line, "-•*123456789. ")
+		// Strip markdown bold/italic markers and trailing punctuation anywhere in line
+		line = strings.ReplaceAll(line, "**", "")
+		line = strings.ReplaceAll(line, "*", "")
+		line = strings.TrimRight(line, ":;., ")
 		line = strings.TrimSpace(line)
-		if line != "" && line != query {
-			expansions = append(expansions, line)
+		// Skip empty, too short, or lines containing digit-heavy patterns
+		// (hallucinated codes like "00-00-0000-..." or ICD code strings)
+		if line == "" || line == query || len([]rune(line)) < 5 {
+			continue
 		}
+		// Reject lines with 4+ consecutive digit groups (hallucinated code patterns)
+		digitGroups := 0
+		for _, part := range strings.Fields(line) {
+			allDigitOrDash := true
+			for _, c := range part {
+				if (c < '0' || c > '9') && c != '-' {
+					allDigitOrDash = false
+					break
+				}
+			}
+			if allDigitOrDash && len(part) > 2 {
+				digitGroups++
+			}
+		}
+		if digitGroups >= 2 {
+			continue
+		}
+		expansions = append(expansions, line)
 	}
 	log.Printf("llm/expand: done expansions=%d %v", len(expansions), expansions)
 	return expansions, nil

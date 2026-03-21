@@ -41,11 +41,12 @@ func SetSemanticLLMEngine(e *llm.Engine) {
 
 // SemanticSearchResponse is returned by the semantic search endpoint.
 type SemanticSearchResponse struct {
-	Query        string               `json:"query"`
-	ICD9Results  []embed.SearchResult `json:"icd9_results"`
-	ICD10Results []embed.SearchResult `json:"icd10_results"`
-	CIPIResults  []embed.SearchResult `json:"cipi_results"`
-	Model        string               `json:"model"`
+	Query            string               `json:"query"`
+	ExpansionQueries []string             `json:"expansion_queries,omitempty"`
+	ICD9Results      []embed.SearchResult `json:"icd9_results"`
+	ICD10Results     []embed.SearchResult `json:"icd10_results"`
+	CIPIResults      []embed.SearchResult `json:"cipi_results"`
+	Model            string               `json:"model"`
 }
 
 // SemanticSearchRequest is the JSON body for the semantic search endpoint.
@@ -136,9 +137,11 @@ func (h *Handler) SemanticSearch(c *gin.Context) {
 	// Ask the LLM to generate ICD-aligned rephrasings of the clinical query.
 	// These variants are embedded alongside the original query so that the
 	// embedding search covers more of the ICD vocabulary space.
+	var expansions []string
 	allQueries := []string{q}
 	if semanticLLMEngine != nil {
-		expansions, expErr := semanticLLMEngine.ExpandQuery(c.Request.Context(), q)
+		var expErr error
+		expansions, expErr = semanticLLMEngine.ExpandQuery(c.Request.Context(), q)
 		if expErr != nil {
 			log.Printf("search/semantic: query expansion failed (non-fatal): %v", expErr)
 		} else if len(expansions) > 0 {
@@ -195,11 +198,12 @@ func (h *Handler) SemanticSearch(c *gin.Context) {
 	log.Printf("search/semantic: done mode=embedding model=%q icd9=%d icd10=%d cipi=%d elapsed=%s",
 		embedBuilder.ModelName(), len(icd9Res), len(icd10Res), len(cipiRes), time.Since(start).Round(time.Millisecond))
 	c.JSON(http.StatusOK, SemanticSearchResponse{
-		Query:        q,
-		ICD9Results:  icd9Res,
-		ICD10Results: icd10Res,
-		CIPIResults:  cipiRes,
-		Model:        embedBuilder.ModelName(),
+		Query:            q,
+		ExpansionQueries: expansions,
+		ICD9Results:      icd9Res,
+		ICD10Results:     icd10Res,
+		CIPIResults:      cipiRes,
+		Model:            embedBuilder.ModelName(),
 	})
 }
 

@@ -85,7 +85,7 @@ Il server parte su `http://localhost:8080`.
 
 | Variabile | Default | Descrizione |
 |---|---|---|
-| `OPENAI_API_KEY` | *(vuoto)* | API key per l'endpoint OpenAI o compatibile (Ollama, LM Studio, ecc.). Con Ollama locale si può lasciare a `ollama` o qualsiasi stringa non vuota |
+| `LLM_API_KEY` | *(vuoto)* | API key per l'endpoint OpenAI o compatibile (Ollama, LM Studio, ecc.). Con Ollama locale si può lasciare a `ollama` o qualsiasi stringa non vuota |
 | `LLM_BASE_URL` | endpoint OpenAI | URL base dell'endpoint compatibile OpenAI, es. `http://localhost:11434/v1` per Ollama |
 | `LLM_MODEL` | `gpt-4o-mini` | Modello chat usato per la **query expansion semantica**. Deve essere un modello in grado di generare testo (non un embedding model) |
 | `LLM_TIMEOUT` | `30` | Timeout in secondi per le chiamate al modello chat |
@@ -96,14 +96,14 @@ Il server parte su `http://localhost:8080`.
 |---|---|---|
 | `LLM_EMBED_MODEL` | *(vuoto)* | Modello embedding. Se assente si usa la modalità BM25 euristica |
 | `LLM_EMBED_BASE_URL` | valore di `LLM_BASE_URL` | URL endpoint embedding (può differire dall'endpoint chat) |
-| `LLM_EMBED_API_KEY` | valore di `OPENAI_API_KEY` | API key per l'endpoint embedding |
+| `LLM_EMBED_API_KEY` | valore di `LLM_API_KEY` | API key per l'endpoint embedding |
 | `LLM_EMBED_ENRICH_TEXT` | `true` | Arricchisce il testo indicizzato con la categoria/capitolo ICD prima dell'embedding. Impostare `false` per disabilitare (usa un namespace di cache separato) |
 
 Modelli embedding consigliati (Ollama, ARM64-friendly):
 - `nomic-embed-text` — 768 dim, ~274 MB, migliore qualità
 - `all-minilm` — 384 dim, ~45 MB, minimo RAM, avvio rapido
 
-> **Nota**: `OPENAI_API_KEY` e `LLM_BASE_URL` configurano **sia** il modello chat (query expansion) **sia** l'embedding se non si impostano le varianti `LLM_EMBED_*` specifiche. Con Ollama tutto locale è sufficiente impostare `LLM_BASE_URL=http://localhost:11434/v1`, `OPENAI_API_KEY=ollama`, `LLM_MODEL=<modello-chat>`, `LLM_EMBED_MODEL=<modello-embed>`.
+> **Nota**: `LLM_API_KEY` e `LLM_BASE_URL` configurano **sia** il modello chat (query expansion) **sia** l'embedding se non si impostano le varianti `LLM_EMBED_*` specifiche. Con Ollama tutto locale è sufficiente impostare `LLM_BASE_URL=http://localhost:11434/v1`, `LLM_API_KEY=ollama`, `LLM_MODEL=<modello-chat>`, `LLM_EMBED_MODEL=<modello-embed>`.
 
 ## API Reference
 
@@ -261,7 +261,7 @@ Questo fornisce al modello di embedding il contesto del capitolo/blocco ICD, rid
 
 #### 2. LLM query expansion
 
-Quando un modello chat è configurato (`OPENAI_API_KEY` + `LLM_MODEL`), prima dell'embedding la query viene inviata all'LLM che produce 2–3 riformulazioni usando la terminologia ICD ufficiale italiana. Per esempio:
+Quando un modello chat è configurato (`LLM_API_KEY` + `LLM_MODEL`), prima dell'embedding la query viene inviata all'LLM che produce 2–3 riformulazioni usando la terminologia ICD ufficiale italiana. Per esempio:
 
 ```
 Query originale:  "infarto anteriore con sopraslivellamento ST"

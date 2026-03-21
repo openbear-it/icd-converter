@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: ICD Converter API
-  version: "1.2.0"
+  version: "1.3.0"
   description: >
     API per la conversione e ricerca di codici ICD-9-CM ↔ ICD-10-IM e codici CIPI (nomenclatura italiana). Supporta lookup puntuale, conversione bidirezionale, espansione gerarchica, ricerca testuale full-text e ricerca per similarità semantica con pipeline avanzata: text enrichment dell'indice, query expansion LLM, multi-query splitting e fusione ibrida RRF (embedding + BM25).
 
@@ -376,7 +376,7 @@ paths:
       description: >
         Ordina i codici ICD e CIPI per similarità semantica rispetto al testo clinico fornito. Quando `LLM_EMBED_MODEL` è configurato la ricerca usa una pipeline avanzata:
 
-        1. **Query expansion LLM** — se è configurato anche un modello chat (`OPENAI_API_KEY` + `LLM_MODEL`),
+        1. **Query expansion LLM** — se è configurato anche un modello chat (`LLM_API_KEY` + `LLM_MODEL`),
            prima dell'embedding il testo viene inviato all'LLM che produce 2-3 riformulazioni usando
            la terminologia ICD ufficiale italiana (bridging del divario lessicale tra linguaggio clinico
            e terminologia formale).
@@ -682,6 +682,12 @@ components:
         query:
           type: string
           description: Query immessa dall'utente
+        expansion_queries:
+          type: array
+          description: Riformulazioni ICD-aligned generate dall'LLM (presenti solo in modalità embedding con LLM chat configurato)
+          items:
+            type: string
+          example: [ "ictus ischemico arteria cerebrale media", "infarto cerebrale territorio ACM" ]
         icd9_results:
           type: array
           items:
