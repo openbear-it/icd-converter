@@ -13,13 +13,79 @@
       min-height: 100vh;
     }
     header {
-      background: linear-gradient(135deg, #1a56db 0%, #0e9f6e 100%);
+      background: linear-gradient(135deg, #1a3db3 0%, #1a56db 45%, #0e9f6e 100%);
       color: #fff;
-      padding: 1.5rem 2rem;
-      box-shadow: 0 2px 8px rgba(0,0,0,.15);
+      padding: 1.6rem 2rem 1.4rem;
+      box-shadow: 0 3px 12px rgba(0,0,0,.2);
+      position: relative;
+      overflow: hidden;
     }
-    header h1 { font-size: 1.6rem; font-weight: 700; }
-    header p  { font-size: .9rem; opacity: .85; margin-top: .25rem; }
+    /* subtle geometric overlay */
+    header::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at 90% 50%, rgba(14,159,110,.25) 0%, transparent 60%),
+        radial-gradient(ellipse at 10% 80%, rgba(255,255,255,.06) 0%, transparent 50%);
+      pointer-events: none;
+    }
+    header > * { position: relative; }
+    .header-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: .75rem;
+      max-width: 960px;
+      margin: 0 auto;
+    }
+    .header-title-group { display: flex; flex-direction: column; gap: .3rem; }
+    header h1 {
+      font-size: 1.75rem;
+      font-weight: 800;
+      letter-spacing: -.02em;
+      display: flex;
+      align-items: center;
+      gap: .55rem;
+    }
+    .header-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2rem;
+      height: 2rem;
+      background: rgba(255,255,255,.18);
+      border-radius: 8px;
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+    header p  { font-size: .85rem; opacity: .82; line-height: 1.5; }
+    .header-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .4rem;
+      align-items: center;
+    }
+    .header-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: .3rem;
+      padding: .25rem .65rem;
+      background: rgba(255,255,255,.14);
+      border: 1px solid rgba(255,255,255,.25);
+      border-radius: 20px;
+      font-size: .72rem;
+      font-weight: 600;
+      white-space: nowrap;
+      backdrop-filter: blur(4px);
+    }
+    .header-badge .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    @media(max-width:600px) { .header-badges { display: none; } }
 
     main { max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
 
@@ -468,8 +534,21 @@
 <body>
 
 <header>
-  <h1>ICD Converter</h1>
-  <p>Conversione ICD-9 ↔ ICD-10 · Ricerca testuale · Ricerca similitudine · Codici CIPI procedure</p>
+  <div class="header-inner">
+    <div class="header-title-group">
+      <h1>
+        <span class="header-icon">🏥</span>
+        ICD Converter
+      </h1>
+      <p>Classificazioni ICD-9-CM · ICD-10-IM v.GAMMA 2.1 · CIPI v.GAMMA 2.0 &mdash; Ministero della Salute italiano</p>
+    </div>
+    <div class="header-badges">
+      <span class="header-badge"><span class="dot" style="background:#93c5fd"></span>ICD-9-CM</span>
+      <span class="header-badge"><span class="dot" style="background:#6ee7b7"></span>ICD-10-IM</span>
+      <span class="header-badge"><span class="dot" style="background:#fde68a"></span>CIPI</span>
+      <span class="header-badge"><span class="dot" style="background:#c4b5fd"></span>Semantic AI</span>
+    </div>
+  </div>
 </header>
 
 <main>
@@ -707,15 +786,164 @@
 
   <!-- PANEL: INFO -->
   <div class="panel" id="panel-info">
+
+    <!-- ── Ricerca per similitudine semantica ───────────────────────────── -->
     <div class="card">
-      <h2>Fonti dei Dati</h2>
-      <p style="font-size:.85rem;color:#4a5568;margin-bottom:1rem">
-        Tutti i dati utilizzati in questa applicazione provengono da fonti ufficiali del <strong>Ministero della Salute italiano</strong>
-        e dell'<strong>Organizzazione Mondiale della Sanità (OMS)</strong>.
-        Sono inclusi i codici ICD-9-CM, ICD-10-IM e <strong>CIPI</strong> (Classificazione degli Interventi e delle Procedure Italiani).
+      <h2>🔍 Ricerca per Similitudine Semantica</h2>
+      <p style="font-size:.87rem;color:#4a5568;margin-bottom:1.2rem;line-height:1.6">
+        La scheda <strong>Ricerca Similitudine</strong> utilizza tecniche di <em>NLP e machine learning</em>
+        per trovare i codici ICD e CIPI più pertinenti a partire da testo clinico libero —
+        referti, lettere di dimissione, diagnosi in linguaggio naturale — senza richiedere la conoscenza
+        esatta dei codici o delle denominazioni ufficiali.
+        Il sistema supporta <strong>due modalità</strong> selezionabili dall'utente:
       </p>
-  
-      <h3 style="font-size:.95rem;color:#1a56db;margin:.8rem 0 .4rem">ICD-9-CM — Classificazione Internazionale delle Malattie, 9ª revisione, Modificazione Clinica</h3>
+
+      <!-- Modalità a confronto -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.2rem">
+
+        <!-- Modalità euristica -->
+        <div class="icd-card" style="background:#f5f3ff;border-color:#c4b5fd">
+          <div class="code" style="color:#6d28d9">🔤 Modalità euristica (keyword)</div>
+          <div class="desc" style="margin-top:.4rem;line-height:1.6">
+            Ricerca basata su <strong>corrispondenza di termini</strong> nelle descrizioni ufficiali ICD/CIPI.
+            Implementa un algoritmo di scoring <strong>BM25-like</strong>: tokenizza la query, espande le
+            varianti morfologiche italiane (singolare/plurale, accenti) e ordina i risultati per frequenza
+            di occorrenza ponderata sulla lunghezza del documento.
+          </div>
+          <div class="desc" style="margin-top:.6rem;line-height:1.6">
+            <strong>Quando è attiva:</strong> sempre disponibile, anche senza Ollama. Usata come fallback
+            automatico se il modello embedding non è configurato, e come componente di re-ranking ibrido
+            nella modalità embedding.
+          </div>
+          <div class="desc" style="margin-top:.6rem">
+            <strong>Limiti:</strong> non comprende sinonimi, varianti ortografiche o termini semanticamente
+            equivalenti non presenti letteralmente nelle descrizioni ufficiali.
+            (<em>es. "ischemia miocardica" non trova "infarto"</em>)
+          </div>
+          <span class="badge" style="background:#ede9fe;color:#6d28d9">Sempre disponibile</span>
+          <span class="badge" style="background:#ede9fe;color:#6d28d9">BM25-like</span>
+          <span class="badge" style="background:#ede9fe;color:#6d28d9">Nessuna GPU</span>
+        </div>
+
+        <!-- Modalità embedding -->
+        <div class="icd-card" style="background:#f0f9ff;border-color:#bae6fd">
+          <div class="code" style="color:#0369a1">🤖 Modalità embedding (AI)</div>
+          <div class="desc" style="margin-top:.4rem;line-height:1.6">
+            Pipeline avanzata che combina <strong>embedding vettoriale</strong> e <strong>ricerca keyword</strong>
+            tramite Reciprocal Rank Fusion (RRF). I codici ICD/CIPI vengono pre-calcolati come vettori ad alta
+            dimensione e memorizzati; al momento della ricerca la query viene embeddato nello stesso spazio
+            e si calcola la <strong>similarità coseno</strong>.
+          </div>
+          <div class="desc" style="margin-top:.6rem;line-height:1.6">
+            <strong>Quando è attiva:</strong> richiede la variabile d'ambiente
+            <code style="background:#e0f2fe;padding:.1rem .35rem;border-radius:3px;font-size:.8rem">LLM_EMBED_MODEL</code>
+            e un server Ollama raggiungibile. Gli indici vengono costruiti al primo avvio e poi
+            memorizzati in cache nel database SQLite.
+          </div>
+          <div class="desc" style="margin-top:.6rem">
+            <strong>Vantaggi:</strong> comprende sinonimi, lingue miste, testi lunghi e terminologia
+            parafrasata. Particolarmente efficace su referti clinici complessi.
+          </div>
+          <span class="badge" style="background:#e0f2fe;color:#0369a1">Richiede Ollama</span>
+          <span class="badge" style="background:#e0f2fe;color:#0369a1">Cosine similarity</span>
+          <span class="badge" style="background:#e0f2fe;color:#0369a1">Cache SQLite</span>
+        </div>
+
+      </div>
+
+      <!-- Componenti pipeline embedding -->
+      <h3 style="font-size:.9rem;font-weight:700;color:#1a56db;margin:.2rem 0 .7rem;padding-bottom:.3rem;border-bottom:2px solid #ebf4ff">Componenti della pipeline embedding</h3>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
+
+        <!-- Embedding vettoriale -->
+        <div class="icd-card" style="background:#f0f9ff;border-color:#bae6fd">
+          <div class="code" style="color:#0369a1">📐 Embedding vettoriale</div>
+          <div class="desc" style="margin-top:.4rem;line-height:1.6">
+            Ogni descrizione ICD/CIPI viene trasformata in un <strong>vettore numerico ad alta dimensione</strong>
+            tramite un modello sentence-transformer. Al momento della ricerca il testo della query viene
+            convertito nello stesso spazio e vengono restituiti i codici con la <strong>similarità coseno</strong> più elevata.
+          </div>
+          <div class="desc" style="margin-top:.6rem">
+            <strong>Modello attivo:</strong> <code style="background:#e0f2fe;padding:.1rem .4rem;border-radius:4px;font-size:.82rem">all-minilm</code>
+            — sentence-transformer multilingua ottimizzato per similarità semantica, servito tramite
+            <a href="https://ollama.com" target="_blank" style="color:#0369a1">Ollama</a>.
+          </div>
+          <span class="badge" style="background:#e0f2fe;color:#0369a1">Cosine similarity</span>
+          <span class="badge" style="background:#e0f2fe;color:#0369a1">Multilingua</span>
+          <span class="badge" style="background:#e0f2fe;color:#0369a1">Ollama</span>
+        </div>
+
+        <!-- Query expansion -->
+        <div class="icd-card" style="background:#f0fdf4;border-color:#bbf7d0">
+          <div class="code" style="color:#15803d">🧠 Query expansion con LLM</div>
+          <div class="desc" style="margin-top:.4rem;line-height:1.6">
+            Prima dell'embedding, la query viene inviata a un modello generativo (chat LLM) che produce
+            <strong>2–3 sinonimi clinici</strong> della diagnosi principale in terminologia ICD italiana.
+            Ogni sinonimo viene embeddato separatamente e i risultati vengono fusi tramite
+            <strong>Reciprocal Rank Fusion (RRF)</strong>.
+          </div>
+          <div class="desc" style="margin-top:.6rem">
+            <strong>Modello attivo:</strong> <code style="background:#dcfce7;padding:.1rem .4rem;border-radius:4px;font-size:.82rem">gemma3:1b</code>
+            — modello generativo leggero, eseguito localmente tramite Ollama. L'espansione è
+            <em>best-effort</em>: se il modello supera il timeout configurato, la ricerca procede
+            comunque con la query originale.
+          </div>
+          <span class="badge" style="background:#dcfce7;color:#15803d">Best-effort</span>
+          <span class="badge" style="background:#dcfce7;color:#15803d">RRF fusion</span>
+          <span class="badge" style="background:#dcfce7;color:#15803d">Locale / privacy</span>
+        </div>
+
+      </div>
+
+      <!-- Pipeline step-by-step -->
+      <div style="background:#fafafa;border:1.5px solid #e2e8f0;border-radius:8px;padding:1rem;margin-bottom:.5rem">
+        <div style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#718096;margin-bottom:.7rem">Pipeline di ricerca</div>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;font-size:.83rem">
+          <div style="background:#1a56db;color:#fff;border-radius:6px;padding:.3rem .7rem;font-weight:600">1. Testo libero</div>
+          <div style="color:#a0aec0">→</div>
+          <div style="background:#0369a1;color:#fff;border-radius:6px;padding:.3rem .7rem;font-weight:600">2. Estrazione diagnosi</div>
+          <div style="color:#a0aec0">→</div>
+          <div style="background:#15803d;color:#fff;border-radius:6px;padding:.3rem .7rem;font-weight:600">3. Espansione LLM</div>
+          <div style="color:#a0aec0">→</div>
+          <div style="background:#7c3aed;color:#fff;border-radius:6px;padding:.3rem .7rem;font-weight:600">4. Embedding multi-query</div>
+          <div style="color:#a0aec0">→</div>
+          <div style="background:#0e9f6e;color:#fff;border-radius:6px;padding:.3rem .7rem;font-weight:600">5. RRF + ranking finale</div>
+        </div>
+        <div style="font-size:.78rem;color:#718096;margin-top:.7rem">
+          Il testo viene anche suddiviso in <em>chunks</em> (clausole cliniche) prima dell'embedding,
+          in modo che referti lunghi non degradino la qualità della ricerca.
+          I risultati di embedding e ricerca keyword vengono fusi con RRF per massimizzare il recall.
+        </div>
+      </div>
+
+      <div class="icd-card" style="background:#fffbeb;border-color:#fcd34d">
+        <div class="desc" style="line-height:1.6">
+          <strong>Nota sulla privacy:</strong> tutta l'elaborazione (embedding e LLM) avviene
+          <strong>localmente</strong> tramite Ollama. Nessun dato clinico viene inviato a servizi cloud esterni.
+          È possibile sostituire i modelli configurando le variabili d'ambiente
+          <code style="background:#fef3c7;padding:.1rem .35rem;border-radius:3px;font-size:.8rem">LLM_MODEL</code>,
+          <code style="background:#fef3c7;padding:.1rem .35rem;border-radius:3px;font-size:.8rem">LLM_EMBED_MODEL</code> e
+          <code style="background:#fef3c7;padding:.1rem .35rem;border-radius:3px;font-size:.8rem">LLM_BASE_URL</code>.
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Fonti dei dati ────────────────────────────────────────────────── -->
+    <div class="card">
+      <h2>📚 Fonti dei Dati</h2>
+      <p style="font-size:.85rem;color:#4a5568;margin-bottom:1.2rem;line-height:1.6">
+        Tutti i dati utilizzati in questa applicazione provengono da fonti ufficiali del
+        <strong>Ministero della Salute italiano</strong> e dell'<strong>Organizzazione Mondiale della Sanità (OMS)</strong>.
+        I file originali sono stati elaborati e normalizzati con gli script presenti nella cartella
+        <code style="background:#f0f4f8;padding:.1rem .35rem;border-radius:3px;font-size:.82rem">scripts/</code>
+        e sono inclusi nel bundle dell'applicazione.
+      </p>
+
+      <!-- ICD-9-CM -->
+      <h3 style="font-size:.9rem;font-weight:700;color:#1a56db;margin:.8rem 0 .5rem;padding-bottom:.3rem;border-bottom:2px solid #ebf4ff">
+        ICD-9-CM — Classificazione Internazionale delle Malattie, 9ª revisione, Modificazione Clinica
+      </h3>
       <div class="icd-card">
         <div class="code">Diagnosi ICD-9-CM</div>
         <div class="desc">16.212 codici di diagnosi in lingua italiana (versione 2007 con correzioni).</div>
@@ -735,8 +963,11 @@
         <span class="badge">4.460 codici</span>
         <span class="badge">Italiano</span>
       </div>
-  
-      <h3 style="font-size:.95rem;color:#1a56db;margin:.8rem 0 .4rem">ICD-10-IM — Classificazione Internazionale delle Malattie, 10ª revisione, versione Italiana per uso del Ministero della Salute</h3>
+
+      <!-- ICD-10-IM -->
+      <h3 style="font-size:.9rem;font-weight:700;color:#1a56db;margin:.8rem 0 .5rem;padding-bottom:.3rem;border-bottom:2px solid #ebf4ff">
+        ICD-10-IM — Classificazione Internazionale delle Malattie, 10ª revisione, versione Italiana (Ministero della Salute)
+      </h3>
       <div class="icd-card">
         <div class="code">Elenco Sistematico ICD-10-IM v.GAMMA 2.1</div>
         <div class="desc">14.785 codici ICD-10-IM in lingua italiana, validi dal 16 febbraio 2026.</div>
@@ -758,8 +989,11 @@
         <span class="badge">19.539 mappature</span>
         <span class="badge">Febbraio 2026</span>
       </div>
-  
-      <h3 style="font-size:.95rem;color:#1a56db;margin:.8rem 0 .4rem">CIPI — Classificazione degli Interventi e delle Procedure Italiani v.GAMMA 2.0</h3>
+
+      <!-- CIPI -->
+      <h3 style="font-size:.9rem;font-weight:700;color:#1a56db;margin:.8rem 0 .5rem;padding-bottom:.3rem;border-bottom:2px solid #ebf4ff">
+        CIPI — Classificazione degli Interventi e delle Procedure Italiani v.GAMMA 2.0
+      </h3>
       <div class="icd-card">
         <div class="code">Tabella CIPI v.GAMMA 2.0 (2025)</div>
         <div class="desc">15.164 codici di procedura italiani: 98 capitoli, 867 blocchi, 3.528 categorie e 10.671 codici codificanti (fatturabili).</div>
@@ -780,10 +1014,13 @@
         </div>
         <span class="badge">Marzo 2026</span>
       </div>
-  
-      <h3 style="font-size:.95rem;color:#1a56db;margin:.8rem 0 .4rem">Nota sull'utilizzo ufficiale</h3>
+
+      <!-- Nota ufficiale -->
+      <h3 style="font-size:.9rem;font-weight:700;color:#1a56db;margin:.8rem 0 .5rem;padding-bottom:.3rem;border-bottom:2px solid #ebf4ff">
+        Nota sull'utilizzo ufficiale
+      </h3>
       <div class="icd-card" style="background:#fffbeb;border-color:#fcd34d">
-        <div class="desc">
+        <div class="desc" style="line-height:1.6">
           Per gli usi ufficiali dei codici di diagnosi all'interno dei flussi informativi NSIS resta valido lo standard
           <strong>ICD-9-CM per tutto il 2026</strong>. ICD-10-IM è in fase di sperimentazione nell'ambito del
           Progetto NSIS-CLASS (DM 23 ottobre 2025) e rappresenta un prototipo soggetto ad aggiornamento.
@@ -792,10 +1029,13 @@
           Riferimento: <a href="https://www.salute.gov.it/new/it/tema/assistenza-ospedaliera-sdo/la-classificazione-delle-diagnosi-icd-10-im/" target="_blank" style="color:#1a56db">Ministero della Salute — ICD-10-IM</a>
         </div>
       </div>
-  
-      <h3 style="font-size:.95rem;color:#1a56db;margin:.8rem 0 .4rem">Licenza</h3>
+
+      <!-- Licenza -->
+      <h3 style="font-size:.9rem;font-weight:700;color:#1a56db;margin:.8rem 0 .5rem;padding-bottom:.3rem;border-bottom:2px solid #ebf4ff">
+        Licenza
+      </h3>
       <div class="icd-card">
-        <div class="desc">
+        <div class="desc" style="line-height:1.6">
           ICD-10-IM è distribuita con licenza <strong>CC BY-NC-ND 4.0</strong>.<br>
           Titolari: Ministero della Salute e Regione Autonoma Friuli Venezia Giulia.<br>
           La traduzione italiana di ICD-10 è stata realizzata dal Centro collaboratore italiano dell'OMS per la Famiglia delle Classificazioni Internazionali.

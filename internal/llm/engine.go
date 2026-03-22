@@ -269,10 +269,18 @@ func stripCodeFences(s string) string {
 // The result is capped at 300 runes so the model focuses on key concepts.
 func extractDiagnosisExcerpt(query string) string {
 	const maxRunes = 300
-	// Italian diagnosis-indicator keywords (lowercase for matching)
+	// Italian diagnosis/procedure indicator keywords (lowercase for matching).
+	// Ordered from most-specific to least-specific; first match wins per sentence.
 	markers := []string{
-		"diagnosi", "eziologia", "riscontro di", "si tratta di",
-		"compatibile con", "quadro di", "conferma di",
+		// diagnosis
+		"diagnosi", "diagnosi principale", "eziologia", "riscontro di",
+		"si tratta di", "compatibile con", "quadro di", "conferma di",
+		"affetto da", "portatore di", "in paziente con",
+		// procedures / indications
+		"indicazione a", "indicazione al", "indicazione per",
+		"procedura", "intervento", "impianto", "eseguita", "eseguito",
+		"posizionamento", "sostituzione", "angioplastica", "bypass",
+		"tavi", "tavr", "cabg", "ptca",
 	}
 
 	// Split on sentence-ending punctuation followed by space or newline.
@@ -379,12 +387,14 @@ impianto transcatetere di valvola aortica`
 
 	log.Printf("llm/expand: calling model=%q query=%q", e.cfg.Model, expandQuery)
 
+	userMsg := "Testo clinico:\n" + expandQuery + "\n\nSinonimi della diagnosi principale (uno per riga):"
+
 	// Streaming — connection stays alive while the model generates tokens.
 	stream, err := e.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
 		Model: e.cfg.Model,
 		Messages: []openai.ChatCompletionMessage{
 			{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
-			{Role: openai.ChatMessageRoleUser, Content: expandQuery},
+			{Role: openai.ChatMessageRoleUser, Content: userMsg},
 		},
 		Temperature: 0.3,
 		MaxTokens:   100,
@@ -417,9 +427,15 @@ impianto transcatetere di valvola aortica`
 	raw := strings.TrimSpace(content)
 	log.Printf("llm/expand: response model=%q elapsed=%s raw=%q", e.cfg.Model, time.Since(start).Round(time.Millisecond), raw)
 
-	// Normalise separators: the model sometimes uses commas instead of newlines.
-	// Replace " , " and "," with newlines so each candidate is on its own line.
-	normalised := strings.NewReplacer(", ", "\n", ",", "\n").Replace(raw)
+	// Normalise separators: the model sometimes uses commas instead of newlines,
+	// and en-dash/em-dash instead of ASCII hyphen (e.g. "I18.8 – ictus ischemico").
+	// Normalise all of these before per-line processing.
+	normalised := strings.NewReplacer(
+		"–", " - ", // en-dash → hyphen
+		"—", " - ", // em-dash → hyphen
+		", ", "\n",
+		",", "\n",
+	).Replace(raw)
 
 	var expansions []string
 	for _, line := range strings.Split(normalised, "\n") {
@@ -441,14 +457,28 @@ impianto transcatetere di valvola aortica`
 			continue
 		}
 
-		// Strip " - description" suffix that follows a code prefix mid-line.
-		if idx := strings.Index(line, " - "); idx > 0 {
-			candidate := strings.TrimSpace(line[idx+3:])
-			if !isICDCodePrefix(candidate) && len([]rune(candidate)) >= 5 {
-				line = candidate
+		// Strip leading "CODE - " or repeated " - " separators produced by some
+		// models that output "I35.0 - stenosi aortica - altri dettagli".
+		// Loop until no more " - " prefixed by a code-like fragment.
+		for strings.Contains(line, " - ") {
+			idx := strings.Index(line, " - ")
+			prefix := strings.TrimSpace(line[:idx])
+			suffix := strings.TrimSpace(line[idx+3:])
+			if isICDCodePrefix(prefix) {
+				// "I35.0 - stenosi aortica" → keep suffix
+				if len([]rune(suffix)) < 5 {
+					line = ""
+				} else {
+					line = suffix
+				}
 			} else {
-				continue
+				// Both halves are text; keep the left part (more likely the diagnosis)
+				line = prefix
+				break
 			}
+		}
+		if line == "" {
+			continue
 		}
 
 		// Reject lines with 2+ numeric-only tokens (hallucinated code patterns)
@@ -469,13 +499,22 @@ impianto transcatetere di valvola aortica`
 			continue
 		}
 
-		// Reject non-diagnostic fragments: lines that are just clinical parameters
-		// or symptom descriptions without a diagnostic noun.
+		// Reject non-diagnostic fragments: lines that are just clinical parameters,
+		// scores, symptoms, treatments, or prognostic statements.
 		lower := strings.ToLower(line)
 		nonDiagnosticTokens := []string{
-			"score", "classe nyha", "nyha", "gradiente", "frazione di eiezione",
+			// clinical scores / parameters
+			"score", "sts", "classe nyha", "nyha", "gradiente", "fraction",
+			"frazione di eiezione", "area valvolare", "pressione", "frequenza",
+			// prognosis / mortality
+			"mortalità", "sopravvivenza", "prognosi", "rischio",
+			// treatments / drugs (not diagnoses)
+			"terapia", "farmaco", "farmaci", "trattamento", "somministrazione",
+			"anti-", "inibitore", "inibitori",
+			// pure symptoms / signs
 			"sincope", "dolore", "dispnea", "diaforesi", "febbre", "vomito",
 			"nausea", "cefalea", "palpitazioni", "edema", "tosse",
+			"diarrea", "sanguinamento", "perdita di", "astenia", "affaticamento",
 		}
 		skip := false
 		for _, tok := range nonDiagnosticTokens {
