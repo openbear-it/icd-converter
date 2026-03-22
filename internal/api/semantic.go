@@ -145,12 +145,11 @@ func (h *Handler) SemanticSearch(c *gin.Context) {
 		err error
 	}
 	var expCh chan expandResult
-	const expansionBudget = 30 * time.Second
 	var expCancel context.CancelFunc
 	if semanticLLMEngine != nil {
 		expCh = make(chan expandResult, 1)
 		var expCtx context.Context
-		expCtx, expCancel = context.WithTimeout(c.Request.Context(), expansionBudget)
+		expCtx, expCancel = context.WithTimeout(c.Request.Context(), semanticLLMEngine.ExpandTimeout())
 		go func() {
 			// expCtx cancellation interrupts the stream if the budget is exceeded.
 			exp, err := semanticLLMEngine.ExpandQuery(expCtx, q)

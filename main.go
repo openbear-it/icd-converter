@@ -71,10 +71,11 @@ func main() {
 	var llmEngine *llm.Engine
 	if apiKey != "" || baseURL != "" {
 		llmEngine = llm.NewEngine(llm.Config{
-			APIKey:         apiKey,
-			BaseURL:        baseURL,
-			Model:          llmModel,
-			TimeoutSeconds: envOrInt("LLM_TIMEOUT", 60),
+			APIKey:               apiKey,
+			BaseURL:              baseURL,
+			Model:                llmModel,
+			TimeoutSeconds:       envOrInt("LLM_TIMEOUT", 60),
+			ExpandTimeoutSeconds: envOrInt("LLM_EXPAND_TIMEOUT", 10),
 		}, store)
 		log.Printf("LLM engine ready: model=%s base_url=%q", llmModel, baseURL)
 		// Pre-warm: ask Ollama to load the model into memory now, so the first

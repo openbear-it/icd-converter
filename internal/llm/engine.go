@@ -23,8 +23,11 @@ type Config struct {
 	BaseURL string
 	// Model is the model name to use (default: gpt-4o-mini).
 	Model string
-	// TimeoutSeconds is the per-request timeout (default: 60).
+	// TimeoutSeconds is the per-request timeout for inference calls (default: 60).
 	TimeoutSeconds int
+	// ExpandTimeoutSeconds is the budget for non-critical query expansion (default: 10).
+	// Keep this short: expansion is best-effort and must not block search results.
+	ExpandTimeoutSeconds int
 }
 
 // InferRequest is the input for an LLM inference call.
@@ -69,6 +72,9 @@ func NewEngine(cfg Config, store *icd.Store) *Engine {
 	if cfg.TimeoutSeconds <= 0 {
 		cfg.TimeoutSeconds = 60
 	}
+	if cfg.ExpandTimeoutSeconds <= 0 {
+		cfg.ExpandTimeoutSeconds = 10
+	}
 	var client *openai.Client
 	if cfg.APIKey != "" {
 		clientCfg := openai.DefaultConfig(cfg.APIKey)
@@ -78,6 +84,11 @@ func NewEngine(cfg Config, store *icd.Store) *Engine {
 		client = openai.NewClientWithConfig(clientCfg)
 	}
 	return &Engine{cfg: cfg, client: client, store: store}
+}
+
+// ExpandTimeout returns the configured budget for best-effort query expansion.
+func (e *Engine) ExpandTimeout() time.Duration {
+	return time.Duration(e.cfg.ExpandTimeoutSeconds) * time.Second
 }
 
 // Infer returns ICD suggestions for the given clinical descriptions.
@@ -246,7 +257,68 @@ func stripCodeFences(s string) string {
 	return strings.TrimSpace(s)
 }
 
-// isICDCodePrefix reports whether s starts with an ICD code pattern:
+// extractDiagnosisExcerpt builds a short focused excerpt from a (potentially
+// long) clinical text to send to the LLM for query expansion.
+//
+// Strategy:
+//  1. Split the text into sentences.
+//  2. Collect sentences that contain explicit diagnosis markers
+//     ("diagnosi", "eziologia", "riscontro di", "si tratta di", "compatibile con").
+//  3. If none found, fall back to a head-truncated version of the original.
+//
+// The result is capped at 300 runes so the model focuses on key concepts.
+func extractDiagnosisExcerpt(query string) string {
+	const maxRunes = 300
+	// Italian diagnosis-indicator keywords (lowercase for matching)
+	markers := []string{
+		"diagnosi", "eziologia", "riscontro di", "si tratta di",
+		"compatibile con", "quadro di", "conferma di",
+	}
+
+	// Split on sentence-ending punctuation followed by space or newline.
+	sentences := strings.FieldsFunc(query, func(r rune) bool {
+		return r == '\n'
+	})
+	// Also split run-on sentences at ". " boundaries.
+	var parts []string
+	for _, s := range sentences {
+		for _, p := range strings.Split(s, ". ") {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				parts = append(parts, p)
+			}
+		}
+	}
+
+	var diagParts []string
+	for _, p := range parts {
+		lower := strings.ToLower(p)
+		for _, m := range markers {
+			if strings.Contains(lower, m) {
+				diagParts = append(diagParts, p)
+				break
+			}
+		}
+	}
+
+	var excerpt string
+	if len(diagParts) > 0 {
+		excerpt = strings.Join(diagParts, ". ")
+	} else {
+		excerpt = query
+	}
+
+	// Cap at maxRunes.
+	runes := []rune(excerpt)
+	if len(runes) > maxRunes {
+		truncated := string(runes[:maxRunes])
+		if idx := strings.LastIndex(truncated, " "); idx > 0 {
+			truncated = truncated[:idx]
+		}
+		excerpt = truncated + "…"
+	}
+	return excerpt
+}
 // 1–2 uppercase ASCII letters immediately followed by a digit
 // (e.g. "I11.0", "G45", "A01.2", "Z80.3 - ...")
 func isICDCodePrefix(s string) bool {
@@ -287,29 +359,23 @@ func (e *Engine) ExpandQuery(ctx context.Context, query string) ([]string, error
 	// the only hard limit is complete silence (ctx deadline exceeded).
 	start := time.Now()
 
-	// Truncate the query: expansion only needs key clinical concepts.
-	// Long free-text causes reasoning models to spend all tokens on thinking.
-	expandQuery := query
-	const maxQueryRunes = 250
-	if runes := []rune(query); len(runes) > maxQueryRunes {
-		// Truncate at last space within limit to avoid cutting mid-word
-		truncated := string(runes[:maxQueryRunes])
-		if idx := strings.LastIndex(truncated, " "); idx > 0 {
-			truncated = truncated[:idx]
-		}
-		expandQuery = truncated + "…"
-	}
+	// Build a focused excerpt for the LLM: prefer sentences that contain the
+	// explicit diagnosis over truncating from the start (which cuts it off in
+	// long admission notes where the diagnosis appears at the end).
+	expandQuery := extractDiagnosisExcerpt(query)
 
-	systemPrompt := `Sei un codificatore ICD esperto. Identifica la diagnosi principale nel testo clinico e scrivi SOLO 2-3 sinonimi diagnostici italiani, uno per riga.
+	systemPrompt := `Sei un codificatore ICD esperto. Nel testo clinico è descritta una diagnosi principale. Scrivi SOLO 2-3 sinonimi ICD italiani di quella diagnosi, UNO PER RIGA, senza virgole tra le voci.
 Regole ASSOLUTE:
-- NIENTE codici ICD (niente lettere seguite da numeri come I10, G45, Z80)
-- NIENTE trattini seguiti da codici
+- UNO SOLO per riga — NON usare virgole per separare più voci
+- NIENTE codici ICD (niente lettere seguite da numeri come I10, G45, Z80, I21, I35)
+- NIENTE sintomi (dolore, dispnea, sincope, ecc.) — solo la diagnosi finale
+- NIENTE parametri clinici (score, frazione, gradiente, classe NYHA, ecc.)
 - Solo frasi diagnostiche brevi in italiano
 - Niente titoli, asterischi, numeri, punteggiatura finale
-Esempio output corretto:
-ictus ischemico acuto
-infarto cerebrale da cardioembolia
-accidente cerebrovascolare ischemico`
+Esempio (testo: "...indicazione a TAVI per stenosi aortica severa..."):
+stenosi aortica severa sintomatica
+valvulopatia aortica ostruttiva critica
+impianto transcatetere di valvola aortica`
 
 	log.Printf("llm/expand: calling model=%q query=%q", e.cfg.Model, expandQuery)
 
@@ -350,45 +416,32 @@ accidente cerebrovascolare ischemico`
 	}
 	raw := strings.TrimSpace(content)
 	log.Printf("llm/expand: response model=%q elapsed=%s raw=%q", e.cfg.Model, time.Since(start).Round(time.Millisecond), raw)
+
+	// Normalise separators: the model sometimes uses commas instead of newlines.
+	// Replace " , " and "," with newlines so each candidate is on its own line.
+	normalised := strings.NewReplacer(", ", "\n", ",", "\n").Replace(raw)
+
 	var expansions []string
-	for _, line := range strings.Split(raw, "\n") {
+	for _, line := range strings.Split(normalised, "\n") {
 		line = strings.TrimSpace(line)
 		// Strip leading bullet/dash/number markers
 		line = strings.TrimLeft(line, "-•*123456789. ")
-		// Strip markdown bold/italic markers and trailing punctuation anywhere in line
+		// Strip markdown bold/italic markers and trailing punctuation
 		line = strings.ReplaceAll(line, "**", "")
 		line = strings.ReplaceAll(line, "*", "")
 		line = strings.TrimRight(line, ":;., ")
 		line = strings.TrimSpace(line)
-		// Skip empty, too short, or lines containing digit-heavy patterns
-		// (hallucinated codes like "00-00-0000-..." or ICD code strings)
+
 		if line == "" || line == query || len([]rune(line)) < 5 {
 			continue
 		}
-		// Reject lines with 4+ consecutive digit groups (hallucinated code patterns)
-		digitGroups := 0
-		for _, part := range strings.Fields(line) {
-			allDigitOrDash := true
-			for _, c := range part {
-				if (c < '0' || c > '9') && c != '-' {
-					allDigitOrDash = false
-					break
-				}
-			}
-			if allDigitOrDash && len(part) > 2 {
-				digitGroups++
-			}
-		}
-		if digitGroups >= 2 {
-			continue
-		}
-		// Reject lines that start with an ICD code pattern:
-		// 1-2 uppercase letters followed immediately by digits (e.g. I11.0, G45, A01.2)
+
+		// Reject lines that start with an ICD code pattern (e.g. I11.0, G45)
 		if isICDCodePrefix(line) {
 			continue
 		}
-		// Strip a trailing " - <description>" that follows a code prefix the
-		// model placed mid-line (e.g. after a bullet was already stripped).
+
+		// Strip " - description" suffix that follows a code prefix mid-line.
 		if idx := strings.Index(line, " - "); idx > 0 {
 			candidate := strings.TrimSpace(line[idx+3:])
 			if !isICDCodePrefix(candidate) && len([]rune(candidate)) >= 5 {
@@ -397,7 +450,48 @@ accidente cerebrovascolare ischemico`
 				continue
 			}
 		}
+
+		// Reject lines with 2+ numeric-only tokens (hallucinated code patterns)
+		digitGroups := 0
+		for _, part := range strings.Fields(line) {
+			pureNum := true
+			for _, c := range part {
+				if (c < '0' || c > '9') && c != '-' {
+					pureNum = false
+					break
+				}
+			}
+			if pureNum && len(part) > 2 {
+				digitGroups++
+			}
+		}
+		if digitGroups >= 2 {
+			continue
+		}
+
+		// Reject non-diagnostic fragments: lines that are just clinical parameters
+		// or symptom descriptions without a diagnostic noun.
+		lower := strings.ToLower(line)
+		nonDiagnosticTokens := []string{
+			"score", "classe nyha", "nyha", "gradiente", "frazione di eiezione",
+			"sincope", "dolore", "dispnea", "diaforesi", "febbre", "vomito",
+			"nausea", "cefalea", "palpitazioni", "edema", "tosse",
+		}
+		skip := false
+		for _, tok := range nonDiagnosticTokens {
+			if strings.HasPrefix(lower, tok) {
+				skip = true
+				break
+			}
+		}
+		if skip {
+			continue
+		}
+
 		expansions = append(expansions, line)
+		if len(expansions) == 3 {
+			break // hard cap at 3
+		}
 	}
 	log.Printf("llm/expand: done expansions=%d %v", len(expansions), expansions)
 	return expansions, nil
