@@ -1,8 +1,8 @@
 # ICD Converter
 
-Servizio REST in Go per la conversione tra codici **ICD-9-CM** e **ICD-10-IM** e la ricerca di codici **CIPI** (Classificazione degli Interventi e Procedure Italiani), con ricerca testuale full-text e ricerca per **similarità semantica** (embedding vettoriale o fallback euristico).
+Servizio REST in Go per la conversione tra codici **ICD-9-CM** e **ICD-10-IM**, la ricerca di codici **CIPI** (Classificazione degli Interventi e Procedure Italiani) e il raggruppamento clinico con il grouper **MS-DRG CMS FY2026 v43.0**, con ricerca testuale full-text e ricerca per **similarità semantica** (embedding vettoriale o fallback euristico).
 
-I dati provengono dalle fonti ufficiali del **Ministero della Salute italiano**: 16.212 diagnosi ICD-9-CM, 4.460 procedure ICD-9-CM, 14.773 codici ICD-10-IM, 18.189 mappature di transcodifica e 259 codici CIPI (versione GAMMA 2.1, valida dal 16/02/2026), tutti incorporati nel binario via `go:embed`.
+I dati provengono dalle fonti ufficiali del **Ministero della Salute italiano**: 16.212 diagnosi ICD-9-CM, 4.460 procedure ICD-9-CM, 14.773 codici ICD-10-IM, 18.189 mappature di transcodifica, 259 codici CIPI (versione GAMMA 2.1, valida dal 16/02/2026), 772 codici DRG e 26 MDC (CMS FY2026 v43.0 con descrizioni in italiano), tutti incorporati nel binario via `go:embed`.
 
 ## Funzionalità
 
@@ -14,8 +14,10 @@ I dati provengono dalle fonti ufficiali del **Ministero della Salute italiano**:
 | Ricerca testuale | Cerca codici per parola chiave in ICD-9, ICD-10 e/o CIPI (ranking BM25) |
 | Ricerca semantica | Similarità vettoriale (embedding) con **text enrichment**, **query expansion LLM** e **fusione ibrida RRF** (embedding + BM25); fallback euristico quando l'embedding non è configurato |
 | CIPI lookup/esplorazione | Lookup puntuale, espansione gerarchica e lista paginata dei codici CIPI |
+| MS-DRG Grouper | Raggruppa un episodio di ricovero in un codice **MS-DRG CMS FY2026 v43.0** (772 DRG, 26 MDC) con peso relativo e degenza attesa; algoritmo nativo Go, nessuna dipendenza esterna |
+| DRG lookup / ricerca | Lookup singolo DRG, ricerca testuale con filtri MDC/tipo, esplorazione MDC con lista DRG |
 | Lista / Paginazione | Esplora codici per versione e categoria con paginazione |
-| UI Web | Interfaccia HTML con tab: Converti, Ricerca, Similarità, Esplora, Info |
+| UI Web | Interfaccia HTML con tab: Converti, Ricerca, Similarità, DRG, Esplora, Info |
 | API Docs | Swagger UI interattiva su `/ui/swagger.html` |
 
 ## Struttura del progetto
@@ -29,15 +31,18 @@ icd-converter/
 │       ├── procedure_icd9cm.csv
 │       ├── icd10im_codes.csv
 │       ├── icd10im_mappings.csv
-        └── cipi_codes.csv       # Codici CIPI (Classificazione degli Interventi e Procedure Italiani)
+│       ├── cipi_codes.csv       # Codici CIPI (Classificazione degli Interventi e Procedure Italiani)
+│       ├── drg_codes.csv        # 772 codici MS-DRG CMS FY2026 v43.0 con descrizioni in italiano
+│       └── mdc_codes.csv        # 26 Major Diagnostic Categories con descrizioni in italiano
 ├── internal/
 │   ├── db/
 │   │   ├── db.go                # Apertura SQLite e schema migration (include tabella cipi_codes)
 │   │   ├── seed.go              # Seeder idempotente da CSV embedded (include import CIPI)
 │   │   └── loader.go            # Carica icd.Store dal DB (include LoadCIPI)
 │   ├── icd/
-│   │   ├── data.go              # Strutture ICDEntry, CIPIEntry e SearchResult
-│   │   └── store.go             # Lookup, conversione, ricerca BM25 (ICD-9, ICD-10, CIPI)
+│   │   ├── data.go              # Strutture ICDEntry, CIPIEntry, DRGEntry, GroupResult e SearchResult
+│   │   ├── store.go             # Lookup, conversione, ricerca BM25 (ICD-9, ICD-10, CIPI, DRG)
+│   │   └── grouper.go           # MS-DRG grouper CMS FY2026 v43.0 (Pre-MDC → MDC → SURG/MED → CC/MCC → DRG)
 │   ├── embed/
 │   │   └── embed.go             # Builder embedding, Index cosine-similarity, multi-query fusion, cache SQLite
 │   └── api/
@@ -125,6 +130,62 @@ GET /api/v1/cipi/{code}               → lookup codice CIPI
 GET /api/v1/cipi/{code}/expand        → codice padre + figli diretti
 GET /api/v1/cipi?page=1&limit=20&type=procedura   → lista paginata (type: diagnosi | procedura)
 ```
+
+### MS-DRG CMS FY2026 v43.0
+
+```
+GET  /api/v1/drg/{code}               → lookup singolo DRG (es. 280, 470, 001)
+GET  /api/v1/drg/search?q=&mdc=&type= → ricerca testuale DRG con filtri opzionali
+GET  /api/v1/mdc                      → elenco completo MDC (26 categorie)
+GET  /api/v1/mdc/{code}               → dettaglio MDC con lista DRG (es. 05, 12, PRE)
+POST /api/v1/drg/group                → raggruppa un episodio in un codice DRG
+```
+
+#### POST /api/v1/drg/group
+
+```json
+{
+  "principal_dx":    "I2109",
+  "secondary_dxs":   ["J9601", "E1165"],
+  "procedures":      ["02703DZ"],
+  "age":             67,
+  "sex":             "M",
+  "discharge_status": "01"
+}
+```
+
+Risposta:
+```json
+{
+  "drg_code": "246",
+  "description": "ANGIOPLASTICA CORONARICA PERCUTANEA CON AMI, STENT E CMM",
+  "mdc": "05",
+  "mdc_description": "Malattie e Disturbi del Sistema Circolatorio",
+  "partition": "SURG",
+  "complication_level": "MCC",
+  "is_pre_mdc": false,
+  "has_or_procedure": true,
+  "weight": 3.8765,
+  "geometric_los": 4.5,
+  "arithmetic_los": 5.8,
+  "mcc_codes_applied": ["J9601"],
+  "cc_codes_applied": [],
+  "principal_diagnosis": { "code": "I2109", "description": "Infarto miocardico acuto della parete anteriore" },
+  "secondary_diagnoses": [
+    { "code": "J9601", "description": "Insufficienza respiratoria acuta con ipossia" },
+    { "code": "E1165", "description": "Diabete mellito di tipo 2 con complicazioni circolatorie" }
+  ],
+  "procedures": [
+    { "code": "02703DZ", "description": "Dilatazione arteria coronaria sinistra anteriore discendente, approccio percutaneo" }
+  ]
+}
+```
+
+Campi chiave della risposta:
+- `complication_level`: `MCC` (Complicazione Maggiore), `CC` (Complicazione), `NONE` (nessuna)
+- `partition`: `SURG` (chirurgico) o `MED` (medico)
+- `is_pre_mdc`: `true` se il DRG appartiene alle categorie Pre-MDC (trapianti, ECMO, VM ≥96h, ustioni estese)
+- `mcc_codes_applied` / `cc_codes_applied`: diagnosi secondarie che hanno influenzato il livello CC
 
 ### Lista / Paginazione
 
@@ -218,6 +279,15 @@ curl "http://localhost:8080/api/v1/search?q=fibrillazione+atriale&version=all"
 # Ricerca testuale solo CIPI procedure
 curl "http://localhost:8080/api/v1/search?q=endoscopia&version=cipi&cipi_type=procedura"
 
+# DRG Grouper
+curl http://localhost:8080/api/v1/drg/280
+curl 'http://localhost:8080/api/v1/drg/search?q=insufficienza+cardiaca&mdc=05'
+curl http://localhost:8080/api/v1/mdc
+curl http://localhost:8080/api/v1/mdc/05
+curl -X POST http://localhost:8080/api/v1/drg/group \
+  -H 'Content-Type: application/json' \
+  -d '{"principal_dx":"I5030","secondary_dxs":["E1169","N184"],"age":75,"sex":"F","discharge_status":"01"}'
+
 # Ricerca semantica su testo clinico lungo (multi-query automatico)
 curl -X POST http://localhost:8080/api/v1/search/semantic \
   -H 'Content-Type: application/json' \
@@ -296,6 +366,20 @@ I risultati dell'embedding vengono fusi con quelli BM25 usando la formula RRF st
 $$\text{score}_{\text{RRF}}(d) = \sum_{l \in \{\text{embed},\, \text{bm25}\}} \frac{1}{k + \text{rank}_l(d)}$$
 
 con $k = 60$. I codici che compaiono in entrambe le liste ricevono un punteggio più alto. Questo garantisce che corrispondenze esatte di termini tecnici non vengano penalizzate dall'embedding, e che concetti semantici non trovati dal keyword search emergano lo stesso.
+
+## MS-DRG Grouper
+
+L'algoritmo segue le specifiche ufficiali **CMS MS-DRG v43.0 FY2026** ed è implementato nativamente in Go (`internal/icd/grouper.go`) senza dipendenze da processi Python o servizi esterni.
+
+### Fasi dell'algoritmo
+
+1. **Pre-MDC** — verifica se la diagnosi/procedura rientra in un DRG ad alta complessità (trapianti organo, ECMO, ventilazione meccanica ≥96h, ustioni estese > 36% corpo) che sovrascrivono la classificazione MDC normale.
+2. **Assegnazione MDC** — la diagnosi principale è mappata su una delle 26 *Major Diagnostic Categories* (sistemi organici).
+3. **Partizione** — all'interno dell'MDC, il ricovero è classificato come **Chirurgico** (presenza di procedura di sala operatoria) o **Medico**.
+4. **Valutazione CC/MCC** — le diagnosi secondarie vengono valutate come *Complicazione/Comorbidità* (CC) o *Complicazione/Comorbidità Maggiore* (MCC), influenzando la scelta tra i DRG triplet.
+5. **Selezione DRG** — l'intersezione MDC × partizione × livello CC produce il codice DRG finale.
+
+Tutte le descrizioni DRG e MDC sono in italiano.
 
 ## Dati CIPI
 

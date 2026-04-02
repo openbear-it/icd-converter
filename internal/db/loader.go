@@ -66,7 +66,17 @@ func LoadStore(sqldb *sql.DB) (*icd.Store, error) {
 		return nil, err
 	}
 
-	return icd.NewStore(icd9entries, icd10entries, cipiEntries), nil
+	// ── Load DRG and MDC (global, not versioned) ───────────────────────────
+	drgEntries, err := loadDRG(sqldb)
+	if err != nil {
+		return nil, err
+	}
+	mdcEntries, err := loadMDC(sqldb)
+	if err != nil {
+		return nil, err
+	}
+
+	return icd.NewStore(icd9entries, icd10entries, cipiEntries, drgEntries, mdcEntries), nil
 }
 
 func loadICD9(db *sql.DB, versionID int64, table string, icd9to10 map[string][]string) ([]icd.ICDEntry, error) {
@@ -243,3 +253,41 @@ func loadCIPI(db *sql.DB, versionID int64) ([]icd.CIPIEntry, error) {
 	}
 	return entries, rows.Err()
 }
+
+func loadDRG(db *sql.DB) ([]icd.DRGEntry, error) {
+	rows, err := db.Query(
+		`SELECT code, mdc, type, description, weight, geometric_los, arithmetic_los FROM drg_codes ORDER BY code`)
+	if err != nil {
+		return nil, fmt.Errorf("query drg_codes: %w", err)
+	}
+	defer rows.Close()
+
+	var entries []icd.DRGEntry
+	for rows.Next() {
+		var e icd.DRGEntry
+		if err := rows.Scan(&e.Code, &e.MDC, &e.Type, &e.Description, &e.Weight, &e.GeometricLOS, &e.ArithmeticLOS); err != nil {
+			continue
+		}
+		entries = append(entries, e)
+	}
+	return entries, rows.Err()
+}
+
+func loadMDC(db *sql.DB) ([]icd.MDCEntry, error) {
+	rows, err := db.Query(`SELECT code, description FROM mdc_codes ORDER BY code`)
+	if err != nil {
+		return nil, fmt.Errorf("query mdc_codes: %w", err)
+	}
+	defer rows.Close()
+
+	var entries []icd.MDCEntry
+	for rows.Next() {
+		var e icd.MDCEntry
+		if err := rows.Scan(&e.Code, &e.Description); err != nil {
+			continue
+		}
+		entries = append(entries, e)
+	}
+	return entries, rows.Err()
+}
+

@@ -75,6 +75,22 @@ CREATE TABLE IF NOT EXISTS icd_embeddings (
     UNIQUE(version_id, icd_type, code, model)
 );
 
+CREATE TABLE IF NOT EXISTS drg_codes (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    code            TEXT NOT NULL UNIQUE,
+    mdc             TEXT NOT NULL,
+    type            TEXT NOT NULL,
+    description     TEXT NOT NULL,
+    weight          REAL NOT NULL DEFAULT 0,
+    geometric_los   REAL NOT NULL DEFAULT 0,
+    arithmetic_los  REAL NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS mdc_codes (
+    code        TEXT PRIMARY KEY,
+    description TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_icd9d_code  ON icd9_diagnosi(code);
 CREATE INDEX IF NOT EXISTS idx_icd9p_code  ON icd9_procedure(code);
 CREATE INDEX IF NOT EXISTS idx_icd10_code  ON icd10_codes(code);

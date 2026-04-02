@@ -24,7 +24,7 @@ import (
 //go:embed web
 var webFS embed.FS
 
-//go:embed data/official/*.csv
+//go:embed data/official/*.csv data/official/*.txt
 var officialDataFS embed.FS
 
 func main() {
@@ -57,14 +57,18 @@ func main() {
 			log.Fatalf("db seed: %v", err)
 		}
 	}
+	// Seed DRG/MDC unconditionally (idempotent — skipped if already present).
+	if err := db.SeedDRG(sqldb, officialDataFS); err != nil {
+		log.Fatalf("db seed drg: %v", err)
+	}
 
 	// ── ICD Store (loaded from SQLite) ────────────────────────────────────────
 	store, err := db.LoadStore(sqldb)
 	if err != nil {
 		log.Fatalf("load store: %v", err)
 	}
-	log.Printf("ICD store loaded: %d ICD-9 codes, %d ICD-10 codes, %d CIPI codes",
-		len(store.AllICD9()), len(store.AllICD10()), len(store.AllCIPI()))
+	log.Printf("ICD store loaded: %d ICD-9 codes, %d ICD-10 codes, %d CIPI codes, %d DRG codes, %d MDC codes",
+		len(store.AllICD9()), len(store.AllICD10()), len(store.AllCIPI()), len(store.AllDRG()), len(store.AllMDC()))
 
 	// ── LLM Engine (for inference and query expansion) ────────────────────────
 	llmModel := envOr("LLM_MODEL", "gpt-4o-mini")
@@ -135,6 +139,13 @@ func main() {
 		log.Printf("Semantic search disabled (set LLM_EMBED_MODEL to enable, e.g. LLM_EMBED_MODEL=all-minilm)")
 	}
 
+	// ── DRG Grouper ──────────────────────────────────────────────────────────
+	grouper := icd.NewGrouper(store)
+	if err := grouper.Load(officialDataFS); err != nil {
+		log.Fatalf("load drg grouper data: %v", err)
+	}
+	log.Printf("DRG grouper ready")
+
 	// ── HTTP Router ───────────────────────────────────────────────────────────
 	if os.Getenv("GIN_MODE") == "" {
 		gin.SetMode(gin.ReleaseMode)
@@ -145,7 +156,7 @@ func main() {
 	r.Use(corsMiddleware())
 
 	// API routes
-	h := api.NewHandler(store)
+	h := api.NewHandler(store, grouper)
 	api.RegisterRoutes(r, h)
 
 	// Serve static web UI from embedded FS

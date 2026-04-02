@@ -1,0 +1,27 @@
+code,description
+01,Malattie e Disturbi del Sistema Nervoso
+02,Malattie e Disturbi dell'Occhio
+03,"Malattie e Disturbi dell'Orecchio, Naso, Bocca e Gola"
+04,Malattie e Disturbi dell'Apparato Respiratorio
+05,Malattie e Disturbi del Sistema Circolatorio
+06,Malattie e Disturbi dell'Apparato Digerente
+07,Malattie e Disturbi del Sistema Epatobiliare e del Pancreas
+08,Malattie e Disturbi del Sistema Muscoloscheletrico e del Tessuto Connettivo
+09,"Malattie e Disturbi della Pelle, Sottocute e Mammella"
+10,"Malattie e Disturbi del Sistema Endocrino, Nutrizionale e Metabolico"
+11,Malattie e Disturbi del Rene e delle Vie Urinarie
+12,Malattie e Disturbi dell'Apparato Riproduttivo Maschile
+13,Malattie e Disturbi dell'Apparato Riproduttivo Femminile
+14,"Gravidanza, Parto e Puerperio"
+15,Neonati e Altri Nati (Periodo Perinatale)
+16,Malattie e Disturbi del Sangue e degli Organi Ematopoietici e Disturbi Immunologici
+17,"Malattie Mieloproliferative e Disturbi, Neoplasie Scarsamente Differenziate"
+18,"Malattie Infettive e Parassitarie, Sistemiche o Non Specificate"
+19,Malattie e Disturbi Mentali
+20,Uso di Alcol/Droghe o Disturbi Mentali Indotti
+21,"Traumatismi, Avvelenamenti ed Effetti Tossici dei Farmaci"
+22,Ustioni
+23,Fattori che Influenzano lo Stato di Salute e Contatti con i Servizi Sanitari
+24,Trauma Significativo Multiplo
+25,Infezioni da HIV
+PRE,"Pre-MDC (Trapianti, ECMO, Tracheotomia, Terapia CAR-T)"

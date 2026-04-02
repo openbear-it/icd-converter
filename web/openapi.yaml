@@ -1,9 +1,9 @@
 openapi: 3.0.3
 info:
   title: ICD Converter API
-  version: "1.3.0"
+  version: "1.4.0"
   description: >
-    API per la conversione e ricerca di codici ICD-9-CM ↔ ICD-10-IM e codici CIPI (nomenclatura italiana). Supporta lookup puntuale, conversione bidirezionale, espansione gerarchica, ricerca testuale full-text e ricerca per similarità semantica con pipeline avanzata: text enrichment dell'indice, query expansion LLM, multi-query splitting e fusione ibrida RRF (embedding + BM25).
+    API per la conversione e ricerca di codici ICD-9-CM ↔ ICD-10-IM e codici CIPI (nomenclatura italiana). Supporta lookup puntuale, conversione bidirezionale, espansione gerarchica, ricerca testuale full-text e ricerca per similarità semantica con pipeline avanzata: text enrichment dell'indice, query expansion LLM, multi-query splitting e fusione ibrida RRF (embedding + BM25). Include il grouper MS-DRG CMS FY2026 v43.0 con descrizioni in italiano.
 
 servers:
 - url: /api/v1
@@ -18,6 +18,8 @@ tags:
   description: Lookup ed esplorazione dei codici CIPI (Classificazione degli Interventi e Procedure Italiani)
 - name: Ricerca
   description: Ricerca full-text e similarità semantica
+- name: DRG
+  description: MS-DRG grouper CMS FY2026 v43.0 — lookup, ricerca testuale e raggruppamento clinico
 
 paths:
 
@@ -473,6 +475,219 @@ paths:
               example:
                 error: "embedding index not available; set LLM_EMBED_MODEL or use mode=heuristic"
 
+  # ── DRG ─────────────────────────────────────────────────────────────────
+
+  /drg/{code}:
+    get:
+      tags: [ DRG ]
+      summary: Lookup singolo codice MS-DRG
+      description: Restituisce i dettagli di un codice MS-DRG (descrizione italiana, tipo, peso relativo, degenze attese, MDC di appartenenza).
+      operationId: getDRG
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+          example: "280"
+        description: Codice DRG numerico, con o senza zeri iniziali (es. `1`, `001`, `280`, `470`).
+      responses:
+        "200":
+          description: DRG trovato
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DRGEntry"
+              example:
+                code: "280"
+                description: "INFARTO MIOCARDICO ACUTO, DIMESSO VIVO CON CMM"
+                type: "MED"
+                mdc: "05"
+                mdc_description: "Malattie e Disturbi del Sistema Circolatorio"
+                weight: 2.1234
+                geometric_los: 4.1
+                arithmetic_los: 5.2
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /drg/search:
+    get:
+      tags: [ DRG ]
+      summary: Ricerca testuale DRG
+      description: Ricerca full-text nelle descrizioni MS-DRG con filtri opzionali per MDC e tipo (SURG/MED).
+      operationId: searchDRG
+      parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+          example: "insufficienza cardiaca"
+        description: Testo da ricercare nelle descrizioni DRG.
+      - name: mdc
+        in: query
+        required: false
+        schema:
+          type: string
+          example: "05"
+        description: Filtra per codice MDC (es. `05`).
+      - name: type
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [ SURG, MED ]
+          example: "MED"
+        description: Filtra per tipo — `SURG` (chirurgico) o `MED` (medico).
+      - $ref: "#/components/parameters/page"
+      - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: Lista DRG corrispondenti
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                    example: 12
+                  results:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DRGEntry"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /mdc:
+    get:
+      tags: [ DRG ]
+      summary: Elenco completo delle MDC
+      description: Restituisce le 26 Major Diagnostic Categories con descrizione italiana.
+      operationId: listMDC
+      responses:
+        "200":
+          description: Lista MDC
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                    example: 26
+                  results:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MDCEntry"
+
+  /mdc/{code}:
+    get:
+      tags: [ DRG ]
+      summary: Dettaglio MDC con DRG
+      description: Restituisce i dettagli di una MDC e tutti i DRG ad essa associati.
+      operationId: getMDC
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+          example: "05"
+        description: Codice MDC a due cifre (es. `05`, `12`, `PRE`).
+      responses:
+        "200":
+          description: MDC trovata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MDCDetail"
+              example:
+                code: "05"
+                description: "Malattie e Disturbi del Sistema Circolatorio"
+                drg_count: 67
+                drgs:
+                - code: "280"
+                  description: "INFARTO MIOCARDICO ACUTO, DIMESSO VIVO CON CMM"
+                  type: "MED"
+                  weight: 2.1234
+                  geometric_los: 4.1
+                  arithmetic_los: 5.2
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /drg/group:
+    post:
+      tags: [ DRG ]
+      summary: Raggruppa un episodio di ricovero in un MS-DRG
+      description: |
+        Calcola il codice MS-DRG assegnato a un episodio di ricovero ospedaliero a partire da:
+        diagnosi principale, diagnosi secondarie (opzionali), procedure ICD-10-PCS (opzionali),
+        età, sesso e modalità di dimissione.
+
+        L'algoritmo segue le specifiche ufficiali CMS MS-DRG v43.0 FY2026:
+        1. Verifica Pre-MDC (trapianti, ECMO, ustioni estese, ventilazione meccanica prolungata)
+        2. Assegnazione MDC dalla diagnosi principale
+        3. Partizione Chirurgica / Medica (presenza di procedure O.R.)
+        4. Valutazione CC/MCC dalle diagnosi secondarie
+        5. Selezione del DRG finale
+      operationId: groupDRG
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GroupRequest"
+            example:
+              principal_dx: "I2109"
+              secondary_dxs: [ "J9601", "E1165" ]
+              procedures: [ "02703DZ" ]
+              age: 67
+              sex: "M"
+              discharge_status: "01"
+      responses:
+        "200":
+          description: Risultato del raggruppamento DRG
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupResult"
+              example:
+                drg_code: "246"
+                description: "ANGIOPLASTICA CORONARICA PERCUTANEA CON AMI, STENT E CMM"
+                mdc: "05"
+                mdc_description: "Malattie e Disturbi del Sistema Circolatorio"
+                partition: "SURG"
+                complication_level: "MCC"
+                is_pre_mdc: false
+                has_or_procedure: true
+                weight: 3.8765
+                geometric_los: 4.5
+                arithmetic_los: 5.8
+                mcc_codes_applied: [ "J9601" ]
+                cc_codes_applied: []
+                principal_diagnosis:
+                  code: "I2109"
+                  description: "Infarto miocardico acuto della parete anteriore"
+                secondary_diagnoses:
+                - code: "J9601"
+                  description: "Insufficienza respiratoria acuta con ipossia"
+                - code: "E1165"
+                  description: "Diabete mellito di tipo 2 con complicazioni circolatorie"
+                procedures:
+                - code: "02703DZ"
+                  description: "Dilatazione dell'arteria coronaria, arteria sinistra anteriore discendente, approccio percutaneo"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "422":
+          description: Codice ICD-10 non trovato o non raggruppabile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: "principal diagnosis code not found: XYZ99"
+
 # ── Components ────────────────────────────────────────────────────────────────
 
 components:
@@ -713,6 +928,210 @@ components:
           type: string
           description: Messaggio di errore
           example: "ICD-9 code not found: 999.9"
+
+    DRGEntry:
+      type: object
+      description: Singolo codice MS-DRG con metadati.
+      properties:
+        code:
+          type: string
+          description: Codice DRG a 3 cifre (zero-padded)
+          example: "280"
+        description:
+          type: string
+          description: Descrizione DRG in italiano
+          example: "INFARTO MIOCARDICO ACUTO, DIMESSO VIVO CON CMM"
+        type:
+          type: string
+          enum: [ SURG, MED ]
+          description: Partizione — `SURG` (chirurgico) o `MED` (medico)
+          example: "MED"
+        mdc:
+          type: string
+          description: Codice MDC di appartenenza
+          example: "05"
+        mdc_description:
+          type: string
+          description: Descrizione MDC in italiano
+          example: "Malattie e Disturbi del Sistema Circolatorio"
+        weight:
+          type: number
+          format: float
+          description: Peso relativo CMS FY2026
+          example: 2.1234
+        geometric_los:
+          type: number
+          format: float
+          description: Durata di degenza geometrica media (giorni)
+          example: 4.1
+        arithmetic_los:
+          type: number
+          format: float
+          description: Durata di degenza aritmetica media (giorni)
+          example: 5.2
+
+    MDCEntry:
+      type: object
+      description: Major Diagnostic Category.
+      properties:
+        code:
+          type: string
+          description: Codice MDC (es. `05`, `PRE`)
+          example: "05"
+        description:
+          type: string
+          description: Descrizione MDC in italiano
+          example: "Malattie e Disturbi del Sistema Circolatorio"
+        drg_count:
+          type: integer
+          description: Numero di DRG appartenenti a questa MDC
+          example: 67
+
+    MDCDetail:
+      allOf:
+      - $ref: "#/components/schemas/MDCEntry"
+      - type: object
+        properties:
+          drgs:
+            type: array
+            description: Lista DRG appartenenti a questa MDC
+            items:
+              $ref: "#/components/schemas/DRGEntry"
+
+    DiagnosisDetail:
+      type: object
+      description: Diagnosi con codice e descrizione risolti.
+      properties:
+        code:
+          type: string
+          example: "I2109"
+        description:
+          type: string
+          example: "Infarto miocardico acuto della parete anteriore"
+
+    ProcedureDetail:
+      type: object
+      description: Procedura con codice e descrizione risolti.
+      properties:
+        code:
+          type: string
+          example: "02703DZ"
+        description:
+          type: string
+          example: "Dilatazione dell'arteria coronaria sinistra anteriore discendente, approccio percutaneo"
+
+    GroupRequest:
+      type: object
+      required: [ principal_dx ]
+      description: Input per il grouper MS-DRG.
+      properties:
+        principal_dx:
+          type: string
+          description: Diagnosi principale ICD-10-CM (obbligatoria)
+          example: "I2109"
+        secondary_dxs:
+          type: array
+          items:
+            type: string
+          description: Diagnosi secondarie ICD-10-CM (opzionali)
+          example: [ "J9601", "E1165" ]
+        procedures:
+          type: array
+          items:
+            type: string
+          description: Procedure ICD-10-PCS (opzionali)
+          example: [ "02703DZ" ]
+        age:
+          type: integer
+          minimum: 0
+          maximum: 150
+          description: Età del paziente in anni
+          example: 67
+        sex:
+          type: string
+          enum: [ M, F, U ]
+          description: Sesso del paziente — `M` (maschio), `F` (femmina), `U` (ignoto)
+          example: "M"
+        discharge_status:
+          type: string
+          description: Codice modalità di dimissione (01=ordinaria, 02=decesso, ecc.)
+          example: "01"
+
+    GroupResult:
+      type: object
+      description: Risultato del raggruppamento MS-DRG.
+      properties:
+        drg_code:
+          type: string
+          description: Codice DRG assegnato
+          example: "246"
+        description:
+          type: string
+          description: Descrizione DRG in italiano
+          example: "ANGIOPLASTICA CORONARICA PERCUTANEA CON AMI, STENT E CMM"
+        mdc:
+          type: string
+          description: Codice MDC
+          example: "05"
+        mdc_description:
+          type: string
+          description: Descrizione MDC in italiano
+          example: "Malattie e Disturbi del Sistema Circolatorio"
+        partition:
+          type: string
+          enum: [ SURG, MED ]
+          description: Partizione del DRG
+          example: "SURG"
+        complication_level:
+          type: string
+          enum: [ MCC, CC, NONE ]
+          description: Livello di complicazione/comorbidità applicato — `MCC`, `CC` o `NONE`
+          example: "MCC"
+        is_pre_mdc:
+          type: boolean
+          description: Indica se il DRG appartiene alla categoria Pre-MDC
+          example: false
+        has_or_procedure:
+          type: boolean
+          description: Indica se è presente almeno una procedura di sala operatoria
+          example: true
+        weight:
+          type: number
+          format: float
+          description: Peso relativo CMS FY2026
+          example: 3.8765
+        geometric_los:
+          type: number
+          format: float
+          description: Durata di degenza geometrica media (giorni)
+          example: 4.5
+        arithmetic_los:
+          type: number
+          format: float
+          description: Durata di degenza aritmetica media (giorni)
+          example: 5.8
+        mcc_codes_applied:
+          type: array
+          items:
+            type: string
+          description: Codici ICD-10-CM di diagnosi secondarie che hanno contribuito come MCC
+          example: [ "J9601" ]
+        cc_codes_applied:
+          type: array
+          items:
+            type: string
+          description: Codici ICD-10-CM di diagnosi secondarie che hanno contribuito come CC
+          example: []
+        principal_diagnosis:
+          $ref: "#/components/schemas/DiagnosisDetail"
+        secondary_diagnoses:
+          type: array
+          items:
+            $ref: "#/components/schemas/DiagnosisDetail"
+        procedures:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProcedureDetail"
 
   responses:
 

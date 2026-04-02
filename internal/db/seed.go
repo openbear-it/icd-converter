@@ -302,3 +302,125 @@ func importCIPI(tx *sql.Tx, fsys fs.FS, versionID int64) (int, error) {
 	}
 	return count, nil
 }
+
+// SeedDRG imports DRG and MDC codes from embedded CSVs.
+// SeedDRG imports DRG and MDC codes from embedded CSVs.
+// Both tables are always refreshed (INSERT OR REPLACE) so description changes are picked up.
+func SeedDRG(db *sql.DB, fsys fs.FS) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	nmdc, err := importMDCCodes(tx, fsys)
+	if err != nil {
+		return err
+	}
+	ndrg, err := importDRGCodes(tx, fsys)
+	if err != nil {
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit drg: %w", err)
+	}
+	log.Printf("db: refreshed DRG codes: %d, MDC codes: %d", ndrg, nmdc)
+	return nil
+}
+
+// importDRGCodes reads drg_codes.csv and inserts MS-DRG entries.
+// CSV columns: code, mdc, type, description, weight, geometric_los, arithmetic_los
+func importDRGCodes(tx *sql.Tx, fsys fs.FS) (int, error) {
+	f, err := fsys.Open("data/official/drg_codes.csv")
+	if err != nil {
+		return 0, fmt.Errorf("open drg_codes.csv: %w", err)
+	}
+	defer f.Close()
+
+	r := csv.NewReader(f)
+	r.FieldsPerRecord = -1
+	_, _ = r.Read() // skip header
+
+	prep, err := tx.Prepare(
+		`INSERT OR REPLACE INTO drg_codes(code, mdc, type, description, weight, geometric_los, arithmetic_los)
+		 VALUES(?,?,?,?,?,?,?)`,
+	)
+	if err != nil {
+		return 0, err
+	}
+	defer prep.Close()
+
+	var count int
+	for {
+		rec, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			continue
+		}
+		if len(rec) < 7 {
+			continue
+		}
+		code := strings.TrimSpace(rec[0])
+		mdc := strings.TrimSpace(rec[1])
+		typ := strings.TrimSpace(rec[2])
+		desc := strings.TrimSpace(rec[3])
+		weight := strings.TrimSpace(rec[4])
+		glos := strings.TrimSpace(rec[5])
+		alos := strings.TrimSpace(rec[6])
+		if code == "" || desc == "" {
+			continue
+		}
+		if _, err := prep.Exec(code, mdc, typ, desc, weight, glos, alos); err != nil {
+			continue
+		}
+		count++
+	}
+	return count, nil
+}
+
+// importMDCCodes reads mdc_codes.csv and inserts MDC entries.
+// CSV columns: code, description
+func importMDCCodes(tx *sql.Tx, fsys fs.FS) (int, error) {
+	f, err := fsys.Open("data/official/mdc_codes.csv")
+	if err != nil {
+		return 0, fmt.Errorf("open mdc_codes.csv: %w", err)
+	}
+	defer f.Close()
+
+	r := csv.NewReader(f)
+	r.FieldsPerRecord = -1
+	_, _ = r.Read() // skip header
+
+	prep, err := tx.Prepare(`INSERT OR REPLACE INTO mdc_codes(code, description) VALUES(?,?)`)
+	if err != nil {
+		return 0, err
+	}
+	defer prep.Close()
+
+	var count int
+	for {
+		rec, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			continue
+		}
+		if len(rec) < 2 {
+			continue
+		}
+		code := strings.TrimSpace(rec[0])
+		desc := strings.TrimSpace(rec[1])
+		if code == "" || desc == "" {
+			continue
+		}
+		if _, err := prep.Exec(code, desc); err != nil {
+			continue
+		}
+		count++
+	}
+	return count, nil
+}

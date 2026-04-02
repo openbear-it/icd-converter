@@ -13,10 +13,14 @@ type Store struct {
 	icd10List   []ICDEntry
 	cipiByCode  map[string]CIPIEntry
 	cipiList    []CIPIEntry
+	drgByCode   map[string]DRGEntry
+	drgList     []DRGEntry
+	mdcByCode   map[string]MDCEntry
+	mdcList     []MDCEntry
 }
 
 // NewStore builds a Store from pre-loaded slices (e.g. loaded from SQLite).
-func NewStore(icd9 []ICDEntry, icd10 []ICDEntry, cipi []CIPIEntry) *Store {
+func NewStore(icd9 []ICDEntry, icd10 []ICDEntry, cipi []CIPIEntry, drg []DRGEntry, mdc []MDCEntry) *Store {
 	s := &Store{
 		icd9ByCode:  make(map[string]ICDEntry, len(icd9)),
 		icd10ByCode: make(map[string]ICDEntry, len(icd10)),
@@ -24,6 +28,10 @@ func NewStore(icd9 []ICDEntry, icd10 []ICDEntry, cipi []CIPIEntry) *Store {
 		icd10List:   icd10,
 		cipiByCode:  make(map[string]CIPIEntry, len(cipi)),
 		cipiList:    cipi,
+		drgByCode:   make(map[string]DRGEntry, len(drg)),
+		drgList:     drg,
+		mdcByCode:   make(map[string]MDCEntry, len(mdc)),
+		mdcList:     mdc,
 	}
 	for _, e := range icd9 {
 		s.icd9ByCode[e.Code] = e
@@ -33,6 +41,12 @@ func NewStore(icd9 []ICDEntry, icd10 []ICDEntry, cipi []CIPIEntry) *Store {
 	}
 	for _, e := range cipi {
 		s.cipiByCode[e.Code] = e
+	}
+	for _, e := range drg {
+		s.drgByCode[e.Code] = e
+	}
+	for _, e := range mdc {
+		s.mdcByCode[e.Code] = e
 	}
 	return s
 }
@@ -108,6 +122,61 @@ func (s *Store) AllICD10() []ICDEntry { return s.icd10List }
 
 // AllCIPI returns all CIPI entries.
 func (s *Store) AllCIPI() []CIPIEntry { return s.cipiList }
+
+// AllDRG returns all DRG entries.
+func (s *Store) AllDRG() []DRGEntry { return s.drgList }
+
+// AllMDC returns all MDC entries.
+func (s *Store) AllMDC() []MDCEntry { return s.mdcList }
+
+// LookupDRG returns the DRG entry for a given code (trimmed, zero-padded to 3 digits).
+func (s *Store) LookupDRG(code string) (DRGEntry, bool) {
+	code = normalizeDRGCode(code)
+	e, ok := s.drgByCode[code]
+	return e, ok
+}
+
+// LookupMDC returns the MDC entry for a given code.
+func (s *Store) LookupMDC(code string) (MDCEntry, bool) {
+	e, ok := s.mdcByCode[strings.TrimSpace(code)]
+	return e, ok
+}
+
+// DRGsByMDCAndType returns all DRG entries for a given MDC and type ("SURG" or "MED").
+func (s *Store) DRGsByMDCAndType(mdc, drgType string) []DRGEntry {
+	var out []DRGEntry
+	for _, e := range s.drgList {
+		if e.MDC == mdc && e.Type == drgType {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// DRGSearchResult is a DRG entry paired with a relevance score.
+type DRGSearchResult struct {
+	DRGEntry
+	Score float64 `json:"score"`
+}
+
+// SearchDRG performs a BM25 keyword search over DRG descriptions.
+// If mdc is non-empty only DRGs in that MDC are searched.
+func (s *Store) SearchDRG(query, mdc string) []DRGSearchResult {
+	tokens := tokenize(query)
+	if len(tokens) == 0 {
+		return nil
+	}
+	return bm25DRG(s.drgList, tokens, mdc)
+}
+
+// normalizeDRGCode zero-pads a DRG code to 3 characters (e.g. "1" → "001").
+func normalizeDRGCode(code string) string {
+	code = strings.TrimSpace(code)
+	for len(code) < 3 {
+		code = "0" + code
+	}
+	return code
+}
 
 // LookupCIPI returns the CIPI entry for a given code (case-insensitive, trimmed).
 func (s *Store) LookupCIPI(code string) (CIPIEntry, bool) {
@@ -338,3 +407,75 @@ func tokenize(s string) []string {
 	}
 	return tokens
 }
+
+// bm25DRG is the BM25 search logic for DRGEntry slices, optionally filtered by MDC.
+func bm25DRG(entries []DRGEntry, tokens []string, mdc string) []DRGSearchResult {
+	type docFields struct {
+		words []string
+		tf    map[string]int
+	}
+	var subset []DRGEntry
+	for _, e := range entries {
+		if mdc == "" || strings.EqualFold(e.MDC, mdc) {
+			subset = append(subset, e)
+		}
+	}
+	if len(subset) == 0 {
+		return nil
+	}
+
+	docs := make([]docFields, len(subset))
+	var totalLen int
+	for i, e := range subset {
+		words := tokenize(e.Description)
+		tf := make(map[string]int, len(words))
+		for _, w := range words {
+			tf[w]++
+		}
+		docs[i] = docFields{words: words, tf: tf}
+		totalLen += len(words)
+	}
+	N := len(subset)
+	avgdl := float64(totalLen) / float64(N)
+	const k1, bParam = 1.5, 0.75
+
+	df := make(map[string]int, len(tokens))
+	for _, tok := range tokens {
+		for _, d := range docs {
+			if d.tf[tok] > 0 {
+				df[tok]++
+			}
+		}
+	}
+
+	var results []DRGSearchResult
+	for i, e := range subset {
+		d := docs[i]
+		dl := float64(len(d.words))
+		var score float64
+		for _, tok := range tokens {
+			tfVal := float64(d.tf[tok])
+			if tfVal == 0 {
+				continue
+			}
+			idf := math.Log((float64(N)-float64(df[tok])+0.5)/(float64(df[tok])+0.5) + 1)
+			score += idf * (tfVal * (k1 + 1)) / (tfVal + k1*(1-bParam+bParam*dl/avgdl))
+		}
+		// bonus for code match
+		for _, tok := range tokens {
+			if strings.HasPrefix(strings.ToLower(e.Code), tok) {
+				score += 5
+			}
+		}
+		if score > 0 {
+			results = append(results, DRGSearchResult{DRGEntry: e, Score: score})
+		}
+	}
+	for i := 1; i < len(results); i++ {
+		for j := i; j > 0 && results[j].Score > results[j-1].Score; j-- {
+			results[j], results[j-1] = results[j-1], results[j]
+		}
+	}
+	return results
+}
+

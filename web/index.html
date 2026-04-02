@@ -67,6 +67,27 @@
       gap: .4rem;
       align-items: center;
     }
+    .header-api-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      padding: .38rem .85rem;
+      background: rgba(255,255,255,.95);
+      color: #1a56db;
+      border: none;
+      border-radius: 20px;
+      font-size: .78rem;
+      font-weight: 700;
+      text-decoration: none;
+      white-space: nowrap;
+      box-shadow: 0 1px 4px rgba(0,0,0,.18);
+      transition: background .15s, box-shadow .15s;
+      cursor: pointer;
+    }
+    .header-api-btn:hover {
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,.22);
+    }
     .header-badge {
       display: inline-flex;
       align-items: center;
@@ -215,6 +236,69 @@
       margin-top: .5rem;
       display: inline-block;
     }
+
+    /* ── DRG Wizard ─────────────────────────────────────────── */
+    .wiz-step {
+      display: flex; flex-direction: column; align-items: center; gap: .2rem;
+      cursor: pointer; user-select: none;
+    }
+    .wiz-num {
+      width: 2rem; height: 2rem; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .82rem; font-weight: 700;
+      background: #e2e8f0; color: #718096;
+      transition: background .2s, color .2s;
+    }
+    .wiz-label { font-size: .7rem; color: #718096; text-align: center; }
+    .wiz-step.active .wiz-num  { background: #7c3aed; color: #fff; }
+    .wiz-step.active .wiz-label { color: #7c3aed; font-weight: 600; }
+    .wiz-step.done .wiz-num   { background: #0e9f6e; color: #fff; }
+    .wiz-step.done .wiz-label { color: #0e9f6e; }
+    .wiz-connector {
+      flex: 1; height: 2px; background: #e2e8f0; max-width: 60px; min-width: 20px; margin-bottom: 1.2rem;
+      transition: background .2s;
+    }
+    .wiz-connector.done { background: #0e9f6e; }
+    .wiz-tag {
+      display: inline-flex; align-items: center; gap: .3rem;
+      background: #e9d5ff; color: #6d28d9; border-radius: 20px;
+      padding: .15rem .55rem .15rem .7rem; font-size: .78rem; font-weight: 600;
+    }
+    .wiz-tag-proc {
+      background: #dcfce7; color: #166534;
+    }
+    .wiz-tag-del {
+      cursor: pointer; font-size:.9rem; line-height:1; opacity:.7;
+    }
+    .wiz-tag-del:hover { opacity:1; }
+    /* ── DRG Wizard search ───────────────────────────────────── */
+    .wiz-srch-toggle {
+      display: inline-flex; align-items: center; gap: .25rem;
+      font-size: .75rem; color: #7c3aed; cursor: pointer;
+      padding: .18rem .5rem; border-radius: 5px;
+      background: #f5f3ff; border: 1px solid #ddd6fe;
+      user-select: none; transition: background .12s;
+    }
+    .wiz-srch-toggle:hover { background: #ede9fe; }
+    .wiz-srch-panel {
+      background: #fafafa; border: 1.5px solid #e2e8f0; border-radius: 8px;
+      padding: .65rem .8rem; margin-top: .45rem;
+    }
+    .wiz-srch-mode-group {
+      display: inline-flex; border: 1px solid #d1d5db; border-radius: 6px;
+      overflow: hidden; flex-shrink: 0;
+    }
+    .wiz-srch-mode-btn {
+      padding: .26rem .65rem; font-size: .75rem;
+      background: #fff; color: #4a5568; border: none; cursor: pointer;
+      font-weight: 500; transition: background .12s, color .12s;
+    }
+    .wiz-srch-mode-btn.active { background: #7c3aed; color: #fff; }
+    .wiz-srch-result {
+      display: flex; align-items: baseline; gap: .4rem;
+      padding: .3rem .45rem; border-radius: 5px; cursor: pointer; margin-bottom: .1rem;
+    }
+    .wiz-srch-result:hover { background: #ede9fe; }
 
     /* ── API panel two-pane layout ──────────────────────────── */
     .api-layout {
@@ -540,13 +624,19 @@
         <span class="header-icon">🏥</span>
         ICD Converter
       </h1>
-      <p>Classificazioni ICD-9-CM · ICD-10-IM v.GAMMA 2.1 · CIPI v.GAMMA 2.0 &mdash; Ministero della Salute italiano</p>
+      <p>Classificazioni ICD-9-CM · ICD-10-IM v.GAMMA 2.1 · CIPI v.GAMMA 2.0 · MS-DRG CMS FY2026 v43.0 &mdash; Ministero della Salute italiano</p>
     </div>
     <div class="header-badges">
       <span class="header-badge"><span class="dot" style="background:#93c5fd"></span>ICD-9-CM</span>
       <span class="header-badge"><span class="dot" style="background:#6ee7b7"></span>ICD-10-IM</span>
       <span class="header-badge"><span class="dot" style="background:#fde68a"></span>CIPI</span>
+      <span class="header-badge"><span class="dot" style="background:#a78bfa"></span>MS-DRG</span>
       <span class="header-badge"><span class="dot" style="background:#c4b5fd"></span>Semantic AI</span>
+      <a class="header-api-btn" href="/ui/swagger.html" target="_blank">
+        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        API Docs
+        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      </a>
     </div>
   </div>
 </header>
@@ -559,9 +649,9 @@
     <button class="tab-btn" onclick="switchTab('search')">Ricerca Testuale</button>
     <button class="tab-btn" onclick="switchTab('infer')">Ricerca Similitudine</button>
     <button class="tab-btn" onclick="switchTab('cipi')">Codici CIPI</button>
+    <button class="tab-btn" onclick="switchTab('drg')">DRG MS</button>
     <button class="tab-btn" onclick="switchTab('list')">Esplora Codici</button>
     <button class="tab-btn" onclick="switchTab('info')">Info</button>
-    <a class="tab-btn" href="/ui/swagger.html" target="_blank" style="text-decoration:none;margin-left:auto">API Docs ↗</a>
   </div>
 
   <!-- PANEL: CONVERT -->
@@ -784,8 +874,344 @@
     <div id="result-cipi"></div>
   </div>
 
+  <!-- PANEL: DRG -->
+  <div class="panel" id="panel-drg">
+    <!-- DRG Grouper: wizard guidato -->
+    <div class="card" id="drg-wizard-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:1.2rem">
+        <h2 style="margin:0">MS-DRG Grouper</h2>
+        <div class="examples" style="margin:0">
+          <span>Esempi:</span>
+          <span class="example-chip" onclick="setDRGGroup('I2109','J9601 E1165','02703DZ',67,'M','01')">AMI + Angioplastica</span>
+          <span class="example-chip" onclick="setDRGGroup('I5030','E1169 N184','',75,'F','01')">Heart Failure</span>
+          <span class="example-chip" onclick="setDRGGroup('J1889','J9601','',82,'M','01')">Polmonite + IRA</span>
+          <span class="example-chip" onclick="setDRGGroup('N186','','5A1D70Z',68,'M','01')">IRC + Dialisi</span>
+          <span class="example-chip" onclick="setDRGGroup('A419','R6521 N179','',71,'M','02')">Sepsi + Shock settico</span>
+          <span class="example-chip" onclick="setDRGGroup('S720','','0QS604Z',80,'F','01')">Frattura femore + ORIF</span>
+        </div>
+      </div>
+
+      <!-- Step indicator -->
+      <div id="wizard-steps" style="display:flex;align-items:center;gap:.3rem;margin-bottom:1.4rem;user-select:none">
+        <div class="wiz-step active" id="wiz-dot-1" onclick="wizGoTo(1)">
+          <div class="wiz-num">1</div>
+          <div class="wiz-label">Paziente</div>
+        </div>
+        <div class="wiz-connector"></div>
+        <div class="wiz-step" id="wiz-dot-2" onclick="wizGoTo(2)">
+          <div class="wiz-num">2</div>
+          <div class="wiz-label">Diagnosi</div>
+        </div>
+        <div class="wiz-connector"></div>
+        <div class="wiz-step" id="wiz-dot-3" onclick="wizGoTo(3)">
+          <div class="wiz-num">3</div>
+          <div class="wiz-label">Procedure</div>
+        </div>
+        <div class="wiz-connector"></div>
+        <div class="wiz-step" id="wiz-dot-4" onclick="wizGoTo(4)">
+          <div class="wiz-num">✓</div>
+          <div class="wiz-label">Riepilogo</div>
+        </div>
+      </div>
+
+      <!-- Step 1: Dati paziente -->
+      <div id="wiz-panel-1" class="wiz-panel">
+        <div style="font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#718096;margin-bottom:.9rem">Passo 1 — Dati del Paziente</div>
+        <div class="form-row" style="flex-wrap:wrap;align-items:flex-end">
+          <div class="form-group" style="max-width:110px">
+            <label>Età <span style="color:#e53e3e">*</span></label>
+            <input type="number" id="grp-age" value="65" min="0" max="150" />
+          </div>
+          <div class="form-group" style="max-width:120px">
+            <label>Sesso <span style="color:#e53e3e">*</span></label>
+            <select id="grp-sex">
+              <option value="M">M — Maschio</option>
+              <option value="F">F — Femmina</option>
+              <option value="U">U — Ignoto</option>
+            </select>
+          </div>
+          <div class="form-group" style="max-width:220px">
+            <label>Modalità di dimissione</label>
+            <select id="grp-discharge">
+              <option value="01">01 — Ordinaria</option>
+              <option value="02">02 — Decesso</option>
+              <option value="03">03 — Trasferimento urgente</option>
+              <option value="04">04 — Trasferimento ordinario</option>
+              <option value="05">05 — Ricovero day hospital</option>
+              <option value="06">06 — Dimissione a domicilio (cure)</option>
+              <option value="07">07 — Dimissione a domicilio (ADI)</option>
+              <option value="09">09 — Trasferimento lungodegenza</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:1rem;text-align:right">
+          <button class="btn" onclick="wizGoTo(2)">Avanti → Diagnosi</button>
+        </div>
+      </div>
+
+      <!-- Step 2: Diagnosi -->
+      <div id="wiz-panel-2" class="wiz-panel" style="display:none">
+        <div style="font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#718096;margin-bottom:.9rem">Passo 2 — Diagnosi</div>
+
+        <!-- PDX -->
+        <div class="form-group" style="margin-bottom:1rem">
+          <label>Diagnosi principale (ICD-10-CM) <span style="color:#e53e3e">*</span></label>
+          <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+            <input type="text" id="grp-pdx" placeholder="es. I2109" style="text-transform:uppercase;max-width:200px"
+                   oninput="wizPdxInput(this)" onkeydown="if(event.key==='Enter')wizGoTo(3)" />
+            <span class="wiz-srch-toggle" onclick="wizSearchToggle('pdx')">🔍 cerca per descrizione</span>
+          </div>
+          <div id="wiz-pdx-hint" style="font-size:.78rem;color:#4a5568;margin-top:.25rem;min-height:1em;font-style:italic"></div>
+          <div id="wiz-srch-pdx" class="wiz-srch-panel" style="display:none">
+            <div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin-bottom:.5rem">
+              <input type="text" id="wiz-srch-q-pdx" placeholder="es. infarto miocardico anteriore"
+                     style="flex:1;min-width:160px" onkeydown="if(event.key==='Enter')wizSearchExec('pdx')" />
+              <div class="wiz-srch-mode-group">
+                <button class="wiz-srch-mode-btn active" id="wiz-srch-mode-pdx-text" onclick="wizSearchModeSet('pdx','text')">Testuale</button>
+                <button class="wiz-srch-mode-btn" id="wiz-srch-mode-pdx-sem" onclick="wizSearchModeSet('pdx','sem')">Semantica</button>
+              </div>
+              <button class="btn" style="padding:.28rem .75rem;font-size:.8rem" onclick="wizSearchExec('pdx')">Cerca</button>
+            </div>
+            <div id="wiz-srch-results-pdx"></div>
+          </div>
+        </div>
+
+        <!-- SDX -->
+        <div class="form-group" style="margin-bottom:.5rem">
+          <label>Diagnosi secondarie (ICD-10-CM)</label>
+          <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;max-width:560px">
+            <input type="text" id="wiz-sdx-input" placeholder="es. J9601" style="text-transform:uppercase;max-width:160px;flex:1"
+                   onkeydown="if(event.key==='Enter'||event.key===','||event.key===' '){event.preventDefault();wizAddSDx();}" />
+            <button class="btn" style="padding:.35rem .9rem;font-size:.82rem" onclick="wizAddSDx()">+ Aggiungi codice</button>
+            <span class="wiz-srch-toggle" onclick="wizSearchToggle('sdx')">🔍 cerca</span>
+          </div>
+          <div id="wiz-srch-sdx" class="wiz-srch-panel" style="display:none;max-width:560px">
+            <div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin-bottom:.5rem">
+              <input type="text" id="wiz-srch-q-sdx" placeholder="es. insufficienza cardiaca, diabete"
+                     style="flex:1;min-width:160px" onkeydown="if(event.key==='Enter')wizSearchExec('sdx')" />
+              <div class="wiz-srch-mode-group">
+                <button class="wiz-srch-mode-btn active" id="wiz-srch-mode-sdx-text" onclick="wizSearchModeSet('sdx','text')">Testuale</button>
+                <button class="wiz-srch-mode-btn" id="wiz-srch-mode-sdx-sem" onclick="wizSearchModeSet('sdx','sem')">Semantica</button>
+              </div>
+              <button class="btn" style="padding:.28rem .75rem;font-size:.8rem" onclick="wizSearchExec('sdx')">Cerca</button>
+            </div>
+            <div id="wiz-srch-results-sdx"></div>
+          </div>
+          <div id="wiz-sdx-tags" style="display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.5rem;min-height:1.5rem"></div>
+        </div>
+
+        <div style="margin-top:1rem;display:flex;gap:.6rem;justify-content:space-between">
+          <button class="btn" style="background:#e2e8f0;color:#4a5568" onclick="wizGoTo(1)">← Indietro</button>
+          <button class="btn" onclick="wizGoTo(3)">Avanti → Procedure</button>
+        </div>
+      </div>
+
+      <!-- Step 3: Procedure -->
+      <div id="wiz-panel-3" class="wiz-panel" style="display:none">
+        <div style="font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#718096;margin-bottom:.9rem">Passo 3 — Procedure</div>
+        <div class="form-group" style="margin-bottom:.5rem">
+          <label>Procedure (ICD-10-PCS) — opzionali</label>
+          <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;max-width:560px">
+            <input type="text" id="wiz-proc-input" placeholder="es. 02703DZ" style="text-transform:uppercase;max-width:180px;flex:1"
+                   onkeydown="if(event.key==='Enter'||event.key===','||event.key===' '){event.preventDefault();wizAddProc();}" />
+            <button class="btn" style="padding:.35rem .9rem;font-size:.82rem" onclick="wizAddProc()">+ Aggiungi codice</button>
+            <span class="wiz-srch-toggle" onclick="wizSearchToggle('proc')">🔍 cerca per nome</span>
+          </div>
+          <div id="wiz-srch-proc" class="wiz-srch-panel" style="display:none;max-width:560px">
+            <div style="font-size:.75rem;color:#d97706;background:#fffbeb;border-radius:4px;padding:.3rem .5rem;margin-bottom:.5rem">ℹ La ricerca restituisce codici ICD-10-IM come riferimento. Il grouper richiede codici ICD-10-PCS — clicca un risultato per precompilare il campo, poi modifica se necessario.</div>
+            <div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin-bottom:.5rem">
+              <input type="text" id="wiz-srch-q-proc" placeholder="es. angioplastica coronarica, bypass"
+                     style="flex:1;min-width:160px" onkeydown="if(event.key==='Enter')wizSearchExec('proc')" />
+              <div class="wiz-srch-mode-group">
+                <button class="wiz-srch-mode-btn active" id="wiz-srch-mode-proc-text" onclick="wizSearchModeSet('proc','text')">Testuale</button>
+                <button class="wiz-srch-mode-btn" id="wiz-srch-mode-proc-sem" onclick="wizSearchModeSet('proc','sem')">Semantica</button>
+              </div>
+              <button class="btn" style="padding:.28rem .75rem;font-size:.8rem" onclick="wizSearchExec('proc')">Cerca</button>
+            </div>
+            <div id="wiz-srch-results-proc"></div>
+          </div>
+          <div id="wiz-proc-tags" style="display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.5rem;min-height:1.5rem"></div>
+        </div>
+        <div style="margin-top:1rem;display:flex;gap:.6rem;justify-content:space-between">
+          <button class="btn" style="background:#e2e8f0;color:#4a5568" onclick="wizGoTo(2)">← Indietro</button>
+          <button class="btn" onclick="wizGoTo(4)">Avanti → Riepilogo</button>
+        </div>
+      </div>
+
+      <!-- Step 4: Riepilogo + Calcola -->
+      <div id="wiz-panel-4" class="wiz-panel" style="display:none">
+        <div style="font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#718096;margin-bottom:.9rem">Passo 4 — Riepilogo</div>
+        <div id="wiz-summary" style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:8px;padding:.85rem 1rem;margin-bottom:1rem;font-size:.87rem;line-height:1.7"></div>
+        <div style="display:flex;gap:.6rem;justify-content:space-between;align-items:center">
+          <button class="btn" style="background:#e2e8f0;color:#4a5568" onclick="wizGoTo(3)">← Indietro</button>
+          <button class="btn" style="background:#7c3aed;font-size:1rem;padding:.55rem 1.6rem" onclick="doDRGGroup()">🧮 Calcola DRG</button>
+        </div>
+      </div>
+
+      <div id="result-drg-group" style="margin-top:.5rem"></div>
+    </div>
+    <!-- Lookup singolo codice DRG -->
+    <div class="card">
+      <h2>Lookup Codice MS-DRG</h2>
+      <p style="font-size:.83rem;color:#718096;margin-bottom:.8rem">
+        Cerca un singolo codice <strong>MS-DRG CMS FY2026 v43.0</strong> (772 DRG, 26 MDC).
+        Il codice può essere espresso con o senza zeri iniziali (es. <code>1</code> = <code>001</code>).
+      </p>
+      <div class="form-row">
+        <div class="form-group" style="max-width:140px">
+          <label>Codice DRG</label>
+          <input type="text" id="drg-lookup-code" placeholder="es. 001, 280, 470" />
+        </div>
+        <button class="btn" onclick="doDRGLookup()">Cerca</button>
+      </div>
+      <div class="examples">
+        <span>Esempi:</span>
+        <span class="example-chip" onclick="setDRGLookup('001')">001 Heart Transplant</span>
+        <span class="example-chip" onclick="setDRGLookup('280')">280 AMI + MCC</span>
+        <span class="example-chip" onclick="setDRGLookup('291')">291 Heart Failure + MCC</span>
+        <span class="example-chip" onclick="setDRGLookup('470')">470 Hip/Knee Replacement</span>
+        <span class="example-chip" onclick="setDRGLookup('193')">193 Pneumonia + MCC</span>
+        <span class="example-chip" onclick="setDRGLookup('871')">871 Septicemia + MV &gt;96h</span>
+      </div>
+      <div id="result-drg-lookup"></div>
+    </div>
+    <!-- Ricerca testuale DRG -->
+    <div class="card">
+      <h2>Ricerca Testuale DRG</h2>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Parole chiave</label>
+          <input type="text" id="drg-search-q" placeholder="es. heart failure, pneumonia, septicemia…" />
+        </div>
+        <div class="form-group" style="max-width:240px">
+          <label>MDC</label>
+          <select id="drg-search-mdc"><option value="">Tutti gli MDC</option></select>
+        </div>
+        <div class="form-group" style="max-width:140px">
+          <label>Tipo</label>
+          <select id="drg-search-type">
+            <option value="">SURG + MED</option>
+            <option value="SURG">Solo SURG</option>
+            <option value="MED">Solo MED</option>
+          </select>
+        </div>
+        <button class="btn" onclick="doDRGSearch()">Cerca</button>
+      </div>
+      <div class="examples">
+        <span>Esempi:</span>
+        <span class="example-chip" onclick="setDRGSearch('heart failure')">heart failure</span>
+        <span class="example-chip" onclick="setDRGSearch('pneumonia')">pneumonia</span>
+        <span class="example-chip" onclick="setDRGSearch('septicemia')">septicemia</span>
+        <span class="example-chip" onclick="setDRGSearch('kidney transplant')">kidney transplant</span>
+        <span class="example-chip" onclick="setDRGSearch('stroke')">stroke</span>
+        <span class="example-chip" onclick="setDRGSearch('respiratory failure')">respiratory failure</span>
+      </div>
+      <div id="result-drg-search"></div>
+    </div>
+    <!-- Esplora MDC -->
+    <div class="card">
+      <h2>Categorie Diagnostiche Principali (MDC)</h2>
+      <p style="font-size:.83rem;color:#718096;margin-bottom:.6rem">Clicca su un MDC per filtrare i DRG che vi appartengono.</p>
+      <div id="result-mdc-list"><p style="color:#718096;font-size:.85rem">Caricamento MDC…</p></div>
+    </div>
+  </div>
+
   <!-- PANEL: INFO -->
   <div class="panel" id="panel-info">
+
+    <!-- ── MS-DRG Grouper ───────────────────────────────────────────────── -->
+    <div class="card">
+      <h2>🏥 MS-DRG Grouper (CMS FY2026 v43.0)</h2>
+      <p style="font-size:.87rem;color:#4a5568;margin-bottom:1.2rem;line-height:1.6">
+        Il grouper implementa l'algoritmo ufficiale <strong>CMS Medicare Severity DRG (MS-DRG), versione 43.0
+        (FY2026)</strong>. Dato un set di diagnosi ICD-10-CM e procedure ICD-10-PCS, assegna il codice DRG
+        che descrive la categoria di trattamento ospedaliero e ne determina il <em>peso relativo</em>
+        (indicatore di intensità di risorse) e la degenza attesa.
+      </p>
+
+      <!-- Algorithm pipeline -->
+      <div style="background:#fafafa;border:1.5px solid #e2e8f0;border-radius:8px;padding:1rem;margin-bottom:1.2rem">
+        <div style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#718096;margin-bottom:.7rem">Algoritmo di raggruppamento (5 fasi)</div>
+        <div style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;font-size:.82rem">
+          <div style="background:#7c3aed;color:#fff;border-radius:6px;padding:.3rem .7rem;font-weight:600">1. Pre-MDC</div>
+          <div style="color:#a0aec0">→</div>
+          <div style="background:#1a56db;color:#fff;border-radius:6px;padding:.3rem .7rem;font-weight:600">2. Assegna MDC</div>
+          <div style="color:#a0aec0">→</div>
+          <div style="background:#2563eb;color:#fff;border-radius:6px;padding:.3rem .7rem;font-weight:600">3. Partizione CHIR/MED</div>
+          <div style="color:#a0aec0">→</div>
+          <div style="background:#d97706;color:#fff;border-radius:6px;padding:.3rem .7rem;font-weight:600">4. Livello CC/CMM</div>
+          <div style="color:#a0aec0">→</div>
+          <div style="background:#0e9f6e;color:#fff;border-radius:6px;padding:.3rem .7rem;font-weight:600">5. Selezione DRG</div>
+        </div>
+        <div style="font-size:.78rem;color:#718096;margin-top:.8rem;line-height:1.6">
+          <strong>Pre-MDC</strong>: verifica se la diagnosi/procedura rientra in un DRG ad alta complessità
+          (trapianti, ECMO, ventilazione meccanica ≥96h, ustioni estese) che sovrascrivono la classificazione MDC.<br>
+          <strong>MDC</strong>: la diagnosi principale è mappata su una delle 26 <em>Major Diagnostic Categories</em>
+          (sistemi organici).<br>
+          <strong>Partizione</strong>: all'interno dell'MDC, il ricovero è classificato come
+          <strong>Chirurgico</strong> (presenza di procedura O.R.) o <strong>Medico</strong>.<br>
+          <strong>CC/CMM</strong>: le diagnosi secondarie vengono valutate come
+          <em>Complicazione o Comorbidità</em> (CC) o <em>Complicazione o Comorbidità Maggiore</em> (CMM),
+          influenzando la scelta tra i DRG triplet (CMM / CC / senza CC).<br>
+          <strong>DRG finale</strong>: intersecazione MDC × partizione × livello CC produce il codice DRG numerico.
+        </div>
+      </div>
+
+      <!-- Data counts -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.8rem;margin-bottom:1.2rem">
+        <div class="icd-card" style="background:#f5f3ff;border-color:#c4b5fd;text-align:center">
+          <div style="font-size:1.5rem;font-weight:900;color:#7c3aed">772</div>
+          <div style="font-size:.78rem;color:#6d28d9;font-weight:600">Codici DRG</div>
+          <div style="font-size:.72rem;color:#718096;margin-top:.2rem">versione v43.0 FY2026</div>
+        </div>
+        <div class="icd-card" style="background:#eff6ff;border-color:#bfdbfe;text-align:center">
+          <div style="font-size:1.5rem;font-weight:900;color:#1a56db">26</div>
+          <div style="font-size:.78rem;color:#1d4ed8;font-weight:600">Categorie MDC</div>
+          <div style="font-size:.72rem;color:#718096;margin-top:.2rem">Major Diagnostic Categories</div>
+        </div>
+        <div class="icd-card" style="background:#f0fdf4;border-color:#bbf7d0;text-align:center">
+          <div style="font-size:1.5rem;font-weight:900;color:#166534">3</div>
+          <div style="font-size:.78rem;color:#166534;font-weight:600">Livelli CC</div>
+          <div style="font-size:.72rem;color:#718096;margin-top:.2rem">Nessuna / CC / CMM</div>
+        </div>
+        <div class="icd-card" style="background:#fffbeb;border-color:#fde68a;text-align:center">
+          <div style="font-size:1.5rem;font-weight:900;color:#92400e">2</div>
+          <div style="font-size:.78rem;color:#92400e;font-weight:600">Partizioni</div>
+          <div style="font-size:.72rem;color:#718096;margin-top:.2rem">CHIRURGICO / MEDICO</div>
+        </div>
+      </div>
+
+      <!-- Source -->
+      <h3 style="font-size:.9rem;font-weight:700;color:#1a56db;margin:.8rem 0 .5rem;padding-bottom:.3rem;border-bottom:2px solid #ebf4ff">
+        Fonti dei Dati
+      </h3>
+      <div class="icd-card">
+        <div class="code">Tabelle MS-DRG v43.0 FY2026 — CMS</div>
+        <div class="desc" style="margin-top:.4rem;line-height:1.6">
+          Tabelle ufficiali di raggruppamento (Pre-MDC, logic tables, CC/MCC exclusion list, MDC assignment)
+          pubblicate dal <strong>Centers for Medicare &amp; Medicaid Services (USA)</strong> per l'anno fiscale 2026.
+        </div>
+        <div class="desc" style="margin-top:.4rem">
+          Fonte: <a href="https://www.cms.gov/medicare/payment/prospective-payment-systems/acute-inpatient-pps/ms-drg-classifications-and-software" target="_blank" style="color:#1a56db">CMS — MS-DRG Classifications and Software</a>
+        </div>
+        <span class="badge">772 DRG</span>
+        <span class="badge">26 MDC</span>
+        <span class="badge">FY2026 (v43.0)</span>
+        <span class="badge">Pubblico</span>
+      </div>
+      <div class="icd-card">
+        <div class="code">Pesi relativi e degenze medie — CMS IPPS FY2026</div>
+        <div class="desc" style="margin-top:.4rem;line-height:1.6">
+          Pesi relativi (relative weights), degenze geometriche medie (geometric mean LOS) e aritmetiche (arithmetic mean LOS)
+          per ciascun DRG, tratti dalle tabelle IPPS FY2026 (<em>Inpatient Prospective Payment System</em>).
+        </div>
+        <div class="desc" style="margin-top:.4rem">
+          Fonte: <a href="https://www.cms.gov/medicare/payment/prospective-payment-systems/acute-inpatient-pps/fy2026-ipps-final-rule-home-page" target="_blank" style="color:#1a56db">CMS — FY2026 IPPS Final Rule</a>
+        </div>
+        <span class="badge">Peso relativo per DRG</span>
+        <span class="badge">GLOS e ALOS</span>
+      </div>
+    </div>
 
     <!-- ── Ricerca per similitudine semantica ───────────────────────────── -->
     <div class="card">
@@ -1102,7 +1528,7 @@ const BASE = '/api/v1';
 
 /* ── TAB SWITCHING ─────────────────────────────────────────── */
 function switchTab(name) {
-  const panels = ['convert','search','infer','cipi','list','info'];
+  const panels = ['convert','search','infer','cipi','drg','list','info'];
   document.querySelectorAll('.tab-btn').forEach((b,i) => {
     b.classList.toggle('active', panels[i] === name);
   });
@@ -1156,6 +1582,10 @@ function entryHtml(e, confidence, rationale, version) {
 
 function escHtml(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function escAttr(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 function twoColResults(icd9, icd10, container) {
@@ -1599,6 +2029,432 @@ async function doCIPIExpand() {
   }
 }
 
+/* ── DRG PANEL ───────────────────────────────────────────────────────── */
+
+function parseCodes(str) {
+  return str.split(/[\s,]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
+}
+
+function setDRGGroup(pdx, sdx, proc, age, sex, discharge) {
+  document.getElementById('grp-pdx').value = pdx;
+  document.getElementById('grp-age').value = age;
+  document.getElementById('grp-sex').value = sex;
+  // Set discharge select
+  const dischargeEl = document.getElementById('grp-discharge');
+  dischargeEl.value = discharge;
+
+  // Rebuild SDx tags
+  wizSdxList = [];
+  document.getElementById('wiz-sdx-tags').innerHTML = '';
+  if (sdx) parseCodes(sdx).forEach(c => wizAddTag(c, 'sdx'));
+
+  // Rebuild proc tags
+  wizProcList = [];
+  document.getElementById('wiz-proc-tags').innerHTML = '';
+  if (proc) parseCodes(proc).forEach(c => wizAddTag(c, 'proc'));
+
+  switchTab('drg');
+  wizGoTo(4);
+  doDRGGroup();
+}
+
+/* ── DRG Wizard state & navigation ──────────────────────────────── */
+let wizSdxList  = [];
+let wizProcList = [];
+let wizCurrentStep = 1;
+
+function wizGoTo(step) {
+  // Validate step 2 requires principal dx
+  if (step > 2) {
+    const pdx = document.getElementById('grp-pdx').value.trim();
+    if (!pdx) { wizGoTo(2); alert('Inserisci la diagnosi principale (ICD-10-CM).'); return; }
+  }
+
+  wizCurrentStep = step;
+  for (let i = 1; i <= 4; i++) {
+    document.getElementById(`wiz-panel-${i}`).style.display = (i === step) ? '' : 'none';
+    const dot = document.getElementById(`wiz-dot-${i}`);
+    dot.classList.remove('active', 'done');
+    if (i === step) dot.classList.add('active');
+    else if (i < step) dot.classList.add('done');
+  }
+  // Update connectors
+  const connectors = document.querySelectorAll('#wizard-steps .wiz-connector');
+  connectors.forEach((c, idx) => {
+    c.classList.toggle('done', idx + 1 < step);
+  });
+  if (step === 4) wizRenderSummary();
+}
+
+function wizAddTag(code, type) {
+  code = code.trim().toUpperCase();
+  if (!code) return;
+  const list = type === 'sdx' ? wizSdxList : wizProcList;
+  if (list.includes(code)) return;
+  list.push(code);
+  const container = document.getElementById(type === 'sdx' ? 'wiz-sdx-tags' : 'wiz-proc-tags');
+  const span = document.createElement('span');
+  span.className = 'wiz-tag' + (type === 'proc' ? ' wiz-tag-proc' : '');
+  span.dataset.code = code;
+  span.innerHTML = `${escHtml(code)} <span class="wiz-tag-del" onclick="wizRemoveTag(this,'${type}')">✕</span>`;
+  container.appendChild(span);
+}
+
+function wizRemoveTag(el, type) {
+  const code = el.parentElement.dataset.code;
+  if (type === 'sdx') wizSdxList = wizSdxList.filter(c => c !== code);
+  else wizProcList = wizProcList.filter(c => c !== code);
+  el.parentElement.remove();
+}
+
+function wizAddSDx() {
+  const inp = document.getElementById('wiz-sdx-input');
+  parseCodes(inp.value).forEach(c => wizAddTag(c, 'sdx'));
+  inp.value = '';
+  inp.focus();
+}
+
+function wizAddProc() {
+  const inp = document.getElementById('wiz-proc-input');
+  parseCodes(inp.value).forEach(c => wizAddTag(c, 'proc'));
+  inp.value = '';
+  inp.focus();
+}
+
+/* ── DRG Wizard search ─────────────────────────────────────── */
+const wizSearchMode = { pdx: 'text', sdx: 'text', proc: 'text' };
+
+function wizSearchToggle(type) {
+  const panel = document.getElementById(`wiz-srch-${type}`);
+  const isOpen = panel.style.display !== 'none';
+  panel.style.display = isOpen ? 'none' : '';
+  if (!isOpen) setTimeout(() => document.getElementById(`wiz-srch-q-${type}`)?.focus(), 50);
+}
+
+function wizSearchModeSet(type, mode) {
+  wizSearchMode[type] = mode;
+  document.getElementById(`wiz-srch-mode-${type}-text`).classList.toggle('active', mode === 'text');
+  document.getElementById(`wiz-srch-mode-${type}-sem`).classList.toggle('active', mode === 'sem');
+}
+
+async function wizSearchExec(type) {
+  const q = document.getElementById(`wiz-srch-q-${type}`).value.trim();
+  const out = document.getElementById(`wiz-srch-results-${type}`);
+  if (!q) return;
+  out.innerHTML = '<span style="color:#718096;font-size:.8rem">Ricerca…</span>';
+  try {
+    let results = [];
+    if (wizSearchMode[type] === 'sem') {
+      const data = await apiFetch(`${BASE}/search/semantic`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ q, version: 'icd10', limit: 8, mode: 'auto' })
+      });
+      results = data.icd10_results || [];
+    } else {
+      const data = await apiFetch(`${BASE}/search?q=${encodeURIComponent(q)}&version=icd10`);
+      results = data.icd10_results || [];
+    }
+    if (!results.length) { out.innerHTML = '<span style="color:#718096;font-size:.8rem">Nessun risultato.</span>'; return; }
+    out.innerHTML = results.slice(0, 8).map(r =>
+      `<div class="wiz-srch-result" data-code="${escAttr(r.code)}" data-desc="${escAttr(r.description)}" data-type="${type}" onclick="wizSearchPick(this)">
+        <code style="background:#e9d5ff;color:#6d28d9;padding:1px 5px;border-radius:3px;font-size:.78rem;white-space:nowrap;flex-shrink:0">${escHtml(r.code)}</code>
+        <span style="color:#4a5568;font-size:.82rem">${escHtml(r.description.length > 78 ? r.description.slice(0, 76) + '…' : r.description)}</span>
+      </div>`
+    ).join('');
+  } catch(e) {
+    out.innerHTML = `<span style="color:#e53e3e;font-size:.8rem">${escHtml(e.message)}</span>`;
+  }
+}
+
+function wizSearchPick(el) {
+  const code = el.dataset.code;
+  const desc = el.dataset.desc;
+  const type = el.dataset.type;
+  if (type === 'pdx') {
+    document.getElementById('grp-pdx').value = code;
+    document.getElementById('wiz-pdx-hint').textContent = desc;
+    document.getElementById('wiz-srch-pdx').style.display = 'none';
+  } else if (type === 'sdx') {
+    wizAddTag(code, 'sdx');
+    document.getElementById('wiz-srch-q-sdx').value = '';
+    document.getElementById('wiz-srch-results-sdx').innerHTML = '';
+    // keep panel open for multiple picks
+  } else {
+    // proc: precompile input, user reviews and manually adds
+    document.getElementById('wiz-proc-input').value = code;
+    document.getElementById('wiz-srch-proc').style.display = 'none';
+    document.getElementById('wiz-proc-input').focus();
+  }
+}
+
+function wizPdxInput(el) {
+  el.value = el.value.toUpperCase();
+  // hint is set via wizSearchPick; clear on manual edit
+  document.getElementById('wiz-pdx-hint').textContent = '';
+}
+
+function wizRenderSummary() {
+  const pdx      = document.getElementById('grp-pdx').value.trim().toUpperCase();
+  const age      = document.getElementById('grp-age').value;
+  const sex      = document.getElementById('grp-sex');
+  const discharge = document.getElementById('grp-discharge');
+  const sexLabel  = sex.options[sex.selectedIndex].text;
+  const discLabel = discharge.options[discharge.selectedIndex].text;
+
+  let html = `<div style="display:grid;grid-template-columns:auto 1fr;gap:.3rem .9rem;align-items:baseline">`;
+  html += `<span style="color:#718096;font-size:.78rem;font-weight:600">ETÀ</span><span>${escHtml(age)} anni</span>`;
+  html += `<span style="color:#718096;font-size:.78rem;font-weight:600">SESSO</span><span>${escHtml(sexLabel)}</span>`;
+  html += `<span style="color:#718096;font-size:.78rem;font-weight:600">DIMISSIONE</span><span>${escHtml(discLabel)}</span>`;
+  html += `<span style="color:#718096;font-size:.78rem;font-weight:600">DX PRINCIPALE</span>`;
+  html += pdx ? `<code style="background:#e9d5ff;color:#6d28d9;padding:1px 6px;border-radius:3px;font-size:.85rem">${escHtml(pdx)}</code>` : `<span style="color:#e53e3e">non inserita</span>`;
+  if (wizSdxList.length) {
+    html += `<span style="color:#718096;font-size:.78rem;font-weight:600">DX SECONDARIE</span>`;
+    html += `<span>${wizSdxList.map(c => `<code style="background:#e0f2fe;color:#0369a1;padding:1px 5px;border-radius:3px;margin-right:.3rem;font-size:.82rem">${escHtml(c)}</code>`).join('')}</span>`;
+  }
+  if (wizProcList.length) {
+    html += `<span style="color:#718096;font-size:.78rem;font-weight:600">PROCEDURE</span>`;
+    html += `<span>${wizProcList.map(c => `<code style="background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px;margin-right:.3rem;font-size:.82rem">${escHtml(c)}</code>`).join('')}</span>`;
+  }
+  html += `</div>`;
+  document.getElementById('wiz-summary').innerHTML = html;
+}
+
+function ccLevelBadge(level) {
+  const labels = { MCC: 'CMM', CC: 'CM', NONE: 'Nessuna' };
+  const map = { MCC: ['#dc2626','#fee2e2'], CC: ['#d97706','#fef3c7'], NONE: ['#6b7280','#f3f4f6'] };
+  const [fg, bg] = map[level] || map.NONE;
+  const label = labels[level] || level;
+  return `<span style="font-size:.72rem;font-weight:700;color:${fg};background:${bg};border-radius:4px;padding:2px 7px;border:1px solid ${fg}" title="${escHtml(level)}">${label}</span>`;
+}
+
+async function doDRGGroup() {
+  const pdx      = document.getElementById('grp-pdx').value.trim().toUpperCase();
+  const age      = parseInt(document.getElementById('grp-age').value, 10) || 0;
+  const sex      = document.getElementById('grp-sex').value;
+  const discharge = document.getElementById('grp-discharge').value.trim() || '01';
+  const out       = document.getElementById('result-drg-group');
+
+  if (!pdx) { out.innerHTML = '<p style="color:#e53e3e">Inserisci la diagnosi principale.</p>'; return; }
+
+  out.innerHTML = '<p style="color:#718096">Calcolo DRG in corso…</p>';
+  try {
+    const body = { principal_dx: pdx, age, sex, discharge_status: discharge };
+    if (wizSdxList.length)  body.secondary_dxs = wizSdxList;
+    if (wizProcList.length) body.procedures    = wizProcList;
+
+    const d = await apiFetch(`${BASE}/drg/group`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    const partLabels = { SURG: 'CHIRURGICO', MED: 'MEDICO' };
+    const partColor = d.partition === 'SURG' ? '#2563eb' : '#059669';
+    const preMdc = d.is_pre_mdc ? `<span style="font-size:.7rem;font-weight:700;background:#fde68a;color:#92400e;border-radius:3px;padding:1px 5px;margin-left:.4rem">PRE-MDC</span>` : '';
+    const orProc = d.has_or_procedure ? `<span style="font-size:.7rem;font-weight:700;background:#dbeafe;color:#1e40af;border-radius:3px;padding:1px 5px;margin-left:.4rem">PROC. CHIR.</span>` : '';
+
+    let html = `<div class="card" style="margin-top:.9rem;background:#f9f9ff;border:2px solid #ede9fe">
+      <!-- Header: DRG code + level + partition -->
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:.5rem;margin-bottom:.5rem">
+        <span style="font-size:2rem;font-weight:900;color:#7c3aed;font-family:monospace;line-height:1">${escHtml(d.drg_code)}</span>
+        ${ccLevelBadge(d.complication_level)}
+        <span style="font-size:.72rem;font-weight:700;color:#fff;background:${partColor};border-radius:4px;padding:2px 7px">${escHtml(partLabels[d.partition] || d.partition)}</span>
+        ${preMdc}${orProc}
+      </div>
+      <div style="font-size:1rem;font-weight:700;color:#1a202c;margin-bottom:.6rem">${escHtml(d.description)}</div>
+      <!-- MDC -->
+      <div style="font-size:.8rem;color:#4a5568;margin-bottom:.7rem">
+        MDC <strong>${escHtml(d.mdc)}</strong> — ${escHtml(d.mdc_description)}
+      </div>
+      <!-- Metrics -->
+      <div style="display:flex;gap:2rem;flex-wrap:wrap;font-size:.85rem;color:#4a5568;padding:.6rem 0;border-top:1px solid #ede9fe;border-bottom:1px solid #ede9fe;margin-bottom:.7rem">
+        <div><span style="color:#718096;font-size:.75rem">Peso relativo</span><br><strong style="font-size:1.15rem;color:#7c3aed">${(+d.weight).toFixed(4)}</strong></div>
+        <div><span style="color:#718096;font-size:.75rem">GLOS (gg)</span><br><strong style="font-size:1.15rem">${(+d.geometric_los).toFixed(1)}</strong></div>
+        <div><span style="color:#718096;font-size:.75rem">ALOS (gg)</span><br><strong style="font-size:1.15rem">${(+d.arithmetic_los).toFixed(1)}</strong></div>
+      </div>`;
+
+    // Applied CC/MCC codes
+    const mccApplied = d.mcc_codes_applied || [];
+    const ccApplied  = d.cc_codes_applied  || [];
+    if (mccApplied.length || ccApplied.length) {
+      html += `<div style="font-size:.8rem;margin-bottom:.6rem">`;
+      if (mccApplied.length) html += `<span style="color:#718096">MCC applicati: </span>${mccApplied.map(c => `<code style="background:#fee2e2;color:#dc2626;padding:1px 4px;border-radius:3px;margin-right:.3rem">${escHtml(c)}</code>`).join('')}<br>`;
+      if (ccApplied.length)  html += `<span style="color:#718096">CC applicati: </span>${ccApplied.map(c => `<code style="background:#fef3c7;color:#d97706;padding:1px 4px;border-radius:3px;margin-right:.3rem">${escHtml(c)}</code>`).join('')}`;
+      html += `</div>`;
+    }
+
+    // Principal diagnosis
+    html += `<div style="font-size:.8rem;color:#718096;margin-bottom:.3rem;font-weight:600">DIAGNOSI PRINCIPALE</div>
+      <div style="font-size:.88rem;margin-bottom:.6rem">
+        <code style="background:#e9d5ff;color:#6d28d9;padding:1px 5px;border-radius:3px">${escHtml(d.principal_diagnosis.code)}</code>
+        <span style="margin-left:.4rem;color:#1a202c">${escHtml(d.principal_diagnosis.description)}</span>
+      </div>`;
+
+    // Secondary diagnoses
+    const secDxs = d.secondary_diagnoses || [];
+    if (secDxs.length) {
+      html += `<div style="font-size:.8rem;color:#718096;margin-bottom:.3rem;font-weight:600">DIAGNOSI SECONDARIE</div>`;
+      secDxs.forEach(sd => {
+        const isMCC = mccApplied.includes(sd.code);
+        const isCC  = ccApplied.includes(sd.code);
+        const badge = isMCC ? ccLevelBadge('MCC') : isCC ? ccLevelBadge('CC') : '';
+        html += `<div style="font-size:.88rem;margin-bottom:.25rem">
+          <code style="background:#e0f2fe;color:#0369a1;padding:1px 5px;border-radius:3px">${escHtml(sd.code)}</code>
+          ${badge}<span style="margin-left:.4rem;color:#1a202c">${escHtml(sd.description)}</span>
+        </div>`;
+      });
+      html += `<div style="margin-bottom:.5rem"></div>`;
+    }
+
+    // Procedures
+    const procs = d.procedures || [];
+    if (procs.length) {
+      html += `<div style="font-size:.8rem;color:#718096;margin-bottom:.3rem;font-weight:600">PROCEDURE</div>`;
+      procs.forEach(p => {
+        html += `<div style="font-size:.88rem;margin-bottom:.25rem">
+          <code style="background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px">${escHtml(p.code)}</code>
+          <span style="margin-left:.4rem;color:#1a202c">${escHtml(p.description)}</span>
+        </div>`;
+      });
+    }
+
+    html += `</div>`;
+    out.innerHTML = html;
+  } catch(e) {
+    out.innerHTML = `<p style="color:#e53e3e">${escHtml(e.message)}</p>`;
+  }
+}
+
+function drgTypeBadge(type) {
+  const labels = { SURG: 'CHIR.', MED: 'MED.' };
+  const color = type === 'SURG' ? '#2563eb' : '#059669';
+  return `<span style="display:inline-block;font-size:.68rem;font-weight:700;color:#fff;background:${color};border-radius:3px;padding:1px 5px;margin-left:.3rem" title="${escHtml(type)}">${labels[type] || escHtml(type)}</span>`;
+}
+
+function drgCardHtml(d) {
+  return `<div class="expand-child-row" style="align-items:flex-start;padding:.55rem 0;border-bottom:1px solid #f0f0f0">
+    <span class="expand-child-code" style="min-width:3.2rem;font-size:.92rem">${escHtml(d.code)}</span>
+    ${drgTypeBadge(d.type)}
+    <span style="flex:1;margin-left:.5rem;font-size:.88rem;color:#1a202c">${escHtml(d.description)}</span>
+    <span style="white-space:nowrap;margin-left:.8rem;font-size:.78rem;color:#718096">
+      Peso: <strong>${(+d.weight).toFixed(4)}</strong> &nbsp;|&nbsp;
+      GLOS: ${(+d.geometric_los).toFixed(1)} &nbsp;|&nbsp;
+      ALOS: ${(+d.arithmetic_los).toFixed(1)}
+    </span>
+  </div>`;
+}
+
+function setDRGLookup(code) {
+  document.getElementById('drg-lookup-code').value = code;
+  switchTab('drg');
+  doDRGLookup();
+}
+
+async function doDRGLookup() {
+  const code = document.getElementById('drg-lookup-code').value.trim();
+  const out  = document.getElementById('result-drg-lookup');
+  if (!code) { out.innerHTML = '<p style="color:#e53e3e">Inserisci un codice DRG.</p>'; return; }
+  out.innerHTML = '<p style="color:#718096">Ricerca…</p>';
+  try {
+    const d = await apiFetch(`${BASE}/drg/${encodeURIComponent(code)}`);
+    let html = `<div class="card" style="margin-top:.8rem;background:#f9f9ff;border:1px solid #ede9fe">
+      <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.6rem">
+        <span style="font-size:1.5rem;font-weight:800;color:#7c3aed;font-family:monospace">${escHtml(d.code)}</span>
+        ${drgTypeBadge(d.type)}
+        <span style="font-size:.78rem;color:#718096;margin-left:.3rem">MDC ${escHtml(d.mdc)}</span>
+      </div>
+      <div style="font-size:1rem;font-weight:700;color:#1a202c;margin-bottom:.7rem">${escHtml(d.description)}</div>
+      <div style="display:flex;gap:2rem;flex-wrap:wrap;font-size:.85rem;color:#4a5568">
+        <div><span style="color:#718096">Peso relativo</span><br><strong style="font-size:1.1rem">${(+d.weight).toFixed(4)}</strong></div>
+        <div><span style="color:#718096">GLOS (gg)</span><br><strong style="font-size:1.1rem">${(+d.geometric_los).toFixed(1)}</strong></div>
+        <div><span style="color:#718096">ALOS (gg)</span><br><strong style="font-size:1.1rem">${(+d.arithmetic_los).toFixed(1)}</strong></div>
+      </div>
+    </div>`;
+    out.innerHTML = html;
+  } catch(e) {
+    out.innerHTML = `<p style="color:#e53e3e">${escHtml(e.message)}</p>`;
+  }
+}
+
+function setDRGSearch(q) {
+  document.getElementById('drg-search-q').value = q;
+  switchTab('drg');
+  doDRGSearch();
+}
+
+async function doDRGSearch() {
+  const q    = document.getElementById('drg-search-q').value.trim();
+  const mdc  = document.getElementById('drg-search-mdc').value;
+  const type = document.getElementById('drg-search-type').value;
+  const out  = document.getElementById('result-drg-search');
+  if (!q) { out.innerHTML = ''; return; }
+  out.innerHTML = '<p style="color:#718096">Ricerca…</p>';
+  try {
+    let url = `${BASE}/drg?q=${encodeURIComponent(q)}`;
+    if (mdc)  url += `&mdc=${encodeURIComponent(mdc)}`;
+    if (type) url += `&type=${encodeURIComponent(type)}`;
+    const data = await apiFetch(url);
+    const items = data.items || [];
+    if (!items.length) { out.innerHTML = '<p style="color:#718096">Nessun risultato.</p>'; return; }
+    let html = `<div class="card" style="margin-top:.8rem"><div style="font-size:.8rem;color:#718096;margin-bottom:.5rem">${items.length} risultati per "<strong>${escHtml(q)}</strong>"</div>`;
+    items.forEach(d => { html += drgCardHtml(d); });
+    html += '</div>';
+    out.innerHTML = html;
+  } catch(e) {
+    out.innerHTML = `<p style="color:#e53e3e">${escHtml(e.message)}</p>`;
+  }
+}
+
+async function loadMDCList() {
+  try {
+    const mdcList = await apiFetch(`${BASE}/mdc`);
+    // populate the MDC filter dropdown in the search form
+    const sel = document.getElementById('drg-search-mdc');
+    mdcList.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.code;
+      opt.textContent = `MDC ${m.code} — ${m.description}`;
+      sel.appendChild(opt);
+    });
+    // render the MDC browser card
+    const out = document.getElementById('result-mdc-list');
+    let html = '<div style="display:flex;flex-wrap:wrap;gap:.5rem">';
+    mdcList.forEach(m => {
+      html += `<button class="example-chip" style="cursor:pointer;border:1px solid #ede9fe;background:#faf5ff;color:#553c9a;padding:.35rem .7rem;border-radius:.4rem;font-size:.78rem;text-align:left" onclick="filterDRGByMDC('${escHtml(m.code)}')">
+        <strong>MDC ${escHtml(m.code)}</strong><br><span style="font-weight:400">${escHtml(m.description)}</span>
+      </button>`;
+    });
+    html += '</div>';
+    out.innerHTML = html;
+  } catch(e) {
+    document.getElementById('result-mdc-list').innerHTML = `<p style="color:#e53e3e">${escHtml(e.message)}</p>`;
+  }
+}
+
+async function filterDRGByMDC(mdcCode) {
+  // scroll to and trigger the DRG search with the MDC pre-selected
+  document.getElementById('drg-search-mdc').value = mdcCode;
+  document.getElementById('drg-search-q').value = '';
+  // list all DRGs for this MDC (paginated)
+  const out = document.getElementById('result-drg-search');
+  out.innerHTML = '<p style="color:#718096">Caricamento…</p>';
+  try {
+    let page = 1, limit = 200;
+    const url = `${BASE}/drg?mdc=${encodeURIComponent(mdcCode)}&page=${page}&limit=${limit}`;
+    const data = await apiFetch(url);
+    const items = data.items || [];
+    if (!items.length) { out.innerHTML = '<p style="color:#718096">Nessun DRG per questo MDC.</p>'; return; }
+    let html = `<div class="card" style="margin-top:.8rem"><div style="font-size:.8rem;color:#718096;margin-bottom:.5rem">${data.total} DRG per MDC ${escHtml(mdcCode)}</div>`;
+    items.forEach(d => { html += drgCardHtml(d); });
+    html += '</div>';
+    out.innerHTML = html;
+    out.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch(e) {
+    out.innerHTML = `<p style="color:#e53e3e">${escHtml(e.message)}</p>`;
+  }
+}
+
 /* ── LIST ──────────────────────────────────────────────────── */
 async function doList() {
   const ver   = document.getElementById('list-ver').value;
@@ -1646,6 +2502,7 @@ document.addEventListener('keydown', e => {
     if (active.id === 'panel-search')  doSearch();
     if (active.id === 'panel-infer')   doSemanticSearch();
     if (active.id === 'panel-cipi')    doCIPISearch();
+    if (active.id === 'panel-drg')     doDRGGroup();
   }
 });
 
@@ -1703,6 +2560,9 @@ async function tryApiPostSemantic(cardId) {
     _apiSetResult('POST', url, r.status, r.statusText, data);
   } catch(e) { _apiSetError('POST', url, e.message); }
 }
+
+// Load MDC data on page start so the dropdown and browser card are ready.
+loadMDCList();
 </script>
 </body>
 </html>
