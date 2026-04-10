@@ -298,6 +298,13 @@ type DRGSearchResponse struct {
 	Items []icd.DRGSearchResult `json:"items"`
 }
 
+// DRGDetailResponse wraps a DRG entry together with the ICD-10-IM codes whose
+// principal diagnoses are typically associated with that DRG.
+type DRGDetailResponse struct {
+	icd.DRGEntry
+	ICD10Codes []icd.ICDEntry `json:"icd10_codes"`
+}
+
 // GetDRG godoc
 // GET /api/v1/drg/:code
 // Returns a single MS-DRG entry. The code may be supplied with or without
@@ -309,7 +316,11 @@ func (h *Handler) GetDRG(c *gin.Context) {
 		c.JSON(http.StatusNotFound, ErrorResponse{Error: "DRG code not found: " + code})
 		return
 	}
-	c.JSON(http.StatusOK, entry)
+	relatedCodes := h.store.ICD10ForDRG(entry.Code)
+	if relatedCodes == nil {
+		relatedCodes = []icd.ICDEntry{}
+	}
+	c.JSON(http.StatusOK, DRGDetailResponse{DRGEntry: entry, ICD10Codes: relatedCodes})
 }
 
 // ListDRG godoc

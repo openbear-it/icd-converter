@@ -797,14 +797,29 @@ func padRight(s string, n int, ch byte) string {
 // ── description helpers ───────────────────────────────────────────────────────
 
 func (g *Grouper) diagDesc(code string) string {
-	// try the existing icd10 store first (icd10im_codes)
+	code = strings.TrimSpace(code)
+	// exact lookup (works when code is already in ICD-10-IM format with dot)
 	if e, ok := g.store.LookupICD10(code); ok {
 		return e.Description
 	}
-	// also try with dot (e.g., "I5030" → store might have "I50.30")
+	// form a dotted variant (e.g. "I2109" → "I21.09") then try progressively
+	// shorter candidates so ICD-10-CM codes that are more specific than the
+	// Italian ICD-10-IM still resolve (e.g. "I21.09" falls back to "I21.0").
 	if len(code) > 3 {
 		dotted := code[:3] + "." + code[3:]
-		if e, ok := g.store.LookupICD10(dotted); ok {
+		for i := len(dotted); i > 3; i-- {
+			candidate := dotted[:i]
+			if strings.HasSuffix(candidate, ".") {
+				continue // never try a code ending with a dot
+			}
+			if e, ok := g.store.LookupICD10(candidate); ok {
+				return e.Description
+			}
+		}
+	}
+	// 3-character category fallback (e.g. "I21")
+	if len(code) >= 3 {
+		if e, ok := g.store.LookupICD10(code[:3]); ok {
 			return e.Description
 		}
 	}

@@ -240,6 +240,90 @@ func childrenOf(list []ICDEntry, prefix string) []ICDEntry {
 	return results
 }
 
+// drgPrefixMap maps each DRG code to the ICD-10-CM/IM code prefixes whose
+// principal diagnoses would group into that DRG family.
+// Only MDC 04 (respiratory) and MDC 05 (circulatory) are fully specified;
+// other DRGs fall back to the category-level codes for their MDC.
+var drgPrefixMap = map[string][]string{
+	// MDC 04 — respiratory system
+	"175": {"I26"}, "176": {"I26"},
+	"180": {"C33", "C34", "C38", "C39", "D02", "D14", "D38"},
+	"181": {"C33", "C34", "C38", "C39", "D02", "D14", "D38"},
+	"182": {"C33", "C34", "C38", "C39", "D02", "D14", "D38"},
+	"183": {"S22", "S27"}, "184": {"S22", "S27"}, "185": {"S22", "S27"},
+	"186": {"J90", "J91"}, "187": {"J90", "J91"}, "188": {"J90", "J91"},
+	"189": {"J96"},
+	"190": {"J40", "J41", "J42", "J43", "J44", "J47"},
+	"191": {"J40", "J41", "J42", "J43", "J44", "J47"},
+	"192": {"J40", "J41", "J42", "J43", "J44", "J47"},
+	"193": {"J12", "J13", "J14", "J15", "J16", "J17", "J18"},
+	"194": {"J12", "J13", "J14", "J15", "J16", "J17", "J18"},
+	"195": {"J12", "J13", "J14", "J15", "J16", "J17", "J18"},
+	"196": {"J84"}, "197": {"J84"}, "198": {"J84"},
+	"199": {"J93"}, "200": {"J93"}, "201": {"J93"},
+	"202": {"J20", "J21", "J45"}, "203": {"J20", "J21", "J45"},
+	// MDC 05 — circulatory system
+	"280": {"I21", "I22"}, "281": {"I21", "I22"}, "282": {"I21", "I22"},
+	"291": {"I50"}, "292": {"I50"}, "293": {"I50"},
+	"299": {"I71"}, "300": {"I71"}, "301": {"I71"},
+	"302": {"I25"}, "303": {"I25"},
+	"304": {"I10", "I11", "I12", "I13", "I15", "I16"},
+	"305": {"I10", "I11", "I12", "I13", "I15", "I16"},
+	"308": {"I47", "I48", "I49"}, "309": {"I47", "I48", "I49"}, "310": {"I47", "I48", "I49"},
+	"311": {"R07"}, "312": {"R07", "R55"}, "313": {"R07"},
+}
+
+// ICD10ForDRG returns ICD-10-IM entries associated with the given (already-
+// normalised) DRG code.  For DRGs in drgPrefixMap it returns the specific
+// category-level codes (up to cat 4, i.e. codes ≤ 5 chars); for all other DRGs
+// it falls back to the 3-character categories for the DRG's MDC.
+func (s *Store) ICD10ForDRG(drgCode string) []ICDEntry {
+	if prefixes, ok := drgPrefixMap[drgCode]; ok {
+		return s.icd10ForPrefixes(prefixes)
+	}
+	drg, ok := s.drgByCode[drgCode]
+	if !ok {
+		return nil
+	}
+	return s.icd10ForMDC(drg.MDC)
+}
+
+// icd10ForPrefixes returns ICD-10 entries whose code starts with any of the
+// given prefixes, limited to codes of at most 5 characters (cat 3 + cat 4).
+func (s *Store) icd10ForPrefixes(prefixes []string) []ICDEntry {
+	if len(prefixes) == 0 {
+		return nil
+	}
+	var result []ICDEntry
+	for _, e := range s.icd10List {
+		if len(e.Code) > 5 {
+			continue // skip cat 5 sub-codes to keep the list concise
+		}
+		for _, pfx := range prefixes {
+			if strings.HasPrefix(e.Code, pfx) {
+				result = append(result, e)
+				break
+			}
+		}
+	}
+	return result
+}
+
+// icd10ForMDC returns the 3-character category codes (cat 3) for a given MDC.
+func (s *Store) icd10ForMDC(mdcCode string) []ICDEntry {
+	var result []ICDEntry
+	for _, e := range s.icd10List {
+		if len(e.Code) != 3 || strings.ContainsAny(e.Code, ".-") {
+			continue
+		}
+		mdc, _ := classifyMDC(e.Code)
+		if mdc == mdcCode {
+			result = append(result, e)
+		}
+	}
+	return result
+}
+
 // searchEntries scores entries against a multi-word query using BM25.
 // The corpus statistics (avgdl, idf) are computed on the fly from the given slice.
 // A small code-match bonus is added on top so that exact code searches rank first.
@@ -274,12 +358,13 @@ func searchEntries(entries []ICDEntry, query string) []SearchResult {
 	// BM25 parameters (standard tuning).
 	const k1 = 1.5
 	const b = 0.75
+	const prefixScale = 0.8 // partial-match weight vs exact match
 
-	// Document frequency per query token.
+	// Document frequency per query token (exact + prefix).
 	df := make(map[string]int, len(tokens))
 	for _, tok := range tokens {
 		for _, d := range docs {
-			if d.tf[tok] > 0 {
+			if d.tf[tok] > 0 || prefixCount(d.descTokens, tok) > 0 {
 				df[tok]++
 			}
 		}
@@ -292,7 +377,12 @@ func searchEntries(entries []ICDEntry, query string) []SearchResult {
 		dl := float64(len(d.descTokens))
 		var score float64
 		for _, tok := range tokens {
-			tfVal := float64(d.tf[tok])
+			tfExact := float64(d.tf[tok])
+			tfPfx := float64(prefixCount(d.descTokens, tok)) * prefixScale
+			tfVal := tfExact
+			if tfVal == 0 {
+				tfVal = tfPfx
+			}
 			if tfVal == 0 {
 				continue
 			}
@@ -353,11 +443,12 @@ func bm25CIPI(entries []CIPIEntry, tokens []string, cipiType string) []CIPISearc
 
 	const k1 = 1.5
 	const bParam = 0.75
+	const prefixScale = 0.8
 
 	df := make(map[string]int, len(tokens))
 	for _, tok := range tokens {
 		for _, d := range docs {
-			if d.tf[tok] > 0 {
+			if d.tf[tok] > 0 || prefixCount(d.words, tok) > 0 {
 				df[tok]++
 			}
 		}
@@ -369,7 +460,12 @@ func bm25CIPI(entries []CIPIEntry, tokens []string, cipiType string) []CIPISearc
 		dl := float64(len(d.words))
 		var score float64
 		for _, tok := range tokens {
-			tfVal := float64(d.tf[tok])
+			tfExact := float64(d.tf[tok])
+			tfPfx := float64(prefixCount(d.words, tok)) * prefixScale
+			tfVal := tfExact
+			if tfVal == 0 {
+				tfVal = tfPfx
+			}
 			if tfVal == 0 {
 				continue
 			}
@@ -408,6 +504,17 @@ func tokenize(s string) []string {
 	return tokens
 }
 
+// prefixCount returns the number of words in the slice that start with prefix.
+func prefixCount(words []string, prefix string) int {
+	var n int
+	for _, w := range words {
+		if strings.HasPrefix(w, prefix) {
+			n++
+		}
+	}
+	return n
+}
+
 // bm25DRG is the BM25 search logic for DRGEntry slices, optionally filtered by MDC.
 func bm25DRG(entries []DRGEntry, tokens []string, mdc string) []DRGSearchResult {
 	type docFields struct {
@@ -438,11 +545,12 @@ func bm25DRG(entries []DRGEntry, tokens []string, mdc string) []DRGSearchResult 
 	N := len(subset)
 	avgdl := float64(totalLen) / float64(N)
 	const k1, bParam = 1.5, 0.75
+	const prefixScale = 0.8
 
 	df := make(map[string]int, len(tokens))
 	for _, tok := range tokens {
 		for _, d := range docs {
-			if d.tf[tok] > 0 {
+			if d.tf[tok] > 0 || prefixCount(d.words, tok) > 0 {
 				df[tok]++
 			}
 		}
@@ -454,7 +562,12 @@ func bm25DRG(entries []DRGEntry, tokens []string, mdc string) []DRGSearchResult 
 		dl := float64(len(d.words))
 		var score float64
 		for _, tok := range tokens {
-			tfVal := float64(d.tf[tok])
+			tfExact := float64(d.tf[tok])
+			tfPfx := float64(prefixCount(d.words, tok)) * prefixScale
+			tfVal := tfExact
+			if tfVal == 0 {
+				tfVal = tfPfx
+			}
 			if tfVal == 0 {
 				continue
 			}

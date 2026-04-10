@@ -2369,8 +2369,21 @@ async function doDRGLookup() {
         <div><span style="color:#718096">Peso relativo</span><br><strong style="font-size:1.1rem">${(+d.weight).toFixed(4)}</strong></div>
         <div><span style="color:#718096">GLOS (gg)</span><br><strong style="font-size:1.1rem">${(+d.geometric_los).toFixed(1)}</strong></div>
         <div><span style="color:#718096">ALOS (gg)</span><br><strong style="font-size:1.1rem">${(+d.arithmetic_los).toFixed(1)}</strong></div>
-      </div>
-    </div>`;
+      </div>`;
+    const codes = d.icd10_codes || [];
+    if (codes.length) {
+      html += `<div style="margin-top:.8rem;padding-top:.7rem;border-top:1px solid #ede9fe">
+        <div style="font-size:.75rem;font-weight:700;color:#718096;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem">Codici ICD-10-IM correlati</div>
+        <div style="display:flex;flex-direction:column;gap:.25rem;max-height:260px;overflow-y:auto">`;
+      codes.forEach(c => {
+        html += `<div style="display:flex;align-items:baseline;gap:.5rem;font-size:.82rem">
+          <code style="background:#e9d5ff;color:#6d28d9;padding:1px 5px;border-radius:3px;white-space:nowrap;flex-shrink:0">${escHtml(c.code)}</code>
+          <span style="color:#1a202c">${escHtml(c.description)}</span>
+        </div>`;
+      });
+      html += `</div></div>`;
+    }
+    html += `</div>`;
     out.innerHTML = html;
   } catch(e) {
     out.innerHTML = `<p style="color:#e53e3e">${escHtml(e.message)}</p>`;
