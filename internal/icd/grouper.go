@@ -455,13 +455,23 @@ func (g *Grouper) selectDRG(
 
 // drgFromDiagnosis maps principal dx to a DRG family.
 func (g *Grouper) drgFromDiagnosis(mdc, pdx, comp string) []string {
-	var family [4]string // mcc_drg, cc_drg, none_drg, label
+	var family [3]string // mcc_drg, cc_drg, none_drg
 
 	switch mdc {
+	case "01":
+		family = nervousFamily(pdx)
 	case "04":
 		family = respiratoryFamily(pdx)
 	case "05":
 		family = circulatoryFamily(pdx)
+	case "06":
+		family = giFamily(pdx)
+	case "07":
+		family = hepatobiliaryFamily(pdx)
+	case "11":
+		family = kidneyFamily(pdx)
+	case "18":
+		family = infectiousFamily(pdx)
 	default:
 		return nil
 	}
@@ -471,7 +481,9 @@ func (g *Grouper) drgFromDiagnosis(mdc, pdx, comp string) []string {
 	return g.applyThreeWay(family, comp)
 }
 
-// drgFromProcedure maps procedure codes to a DRG family (currently MDC 05 only).
+// drgFromProcedure maps procedure codes to a DRG family.
+// Currently implements procedure-specific routing for MDC 05 (cardiac procedures);
+// all other MDCs rely on the bestSeverityMatch fallback.
 func (g *Grouper) drgFromProcedure(mdc string, procs []string, comp string) []string {
 	for _, code := range procs {
 		if len(code) != 7 {
@@ -486,7 +498,7 @@ func (g *Grouper) drgFromProcedure(mdc string, procs []string, comp string) []st
 	return nil
 }
 
-func (g *Grouper) applyThreeWay(fam [4]string, comp string) []string {
+func (g *Grouper) applyThreeWay(fam [3]string, comp string) []string {
 	var code string
 	switch comp {
 	case "MCC":
@@ -496,25 +508,25 @@ func (g *Grouper) applyThreeWay(fam [4]string, comp string) []string {
 	default:
 		code = fam[2]
 	}
-	return g.resolveDRG(code, fam[3])
+	return g.resolveDRG(code)
 }
 
-func (g *Grouper) applyTwoWay(fam [3]string, comp string) []string {
+func (g *Grouper) applyTwoWay(fam [2]string, comp string) []string {
 	code := fam[1]
 	if comp == "MCC" {
 		code = fam[0]
 	}
-	return g.resolveDRG(code, fam[2])
+	return g.resolveDRG(code)
 }
 
-func (g *Grouper) resolveDRG(code, fallbackDesc string) []string {
+func (g *Grouper) resolveDRG(code string) []string {
 	ref, ok := g.store.LookupDRG(code)
 	if ok {
 		geo := floatToStr(ref.GeometricLOS)
 		arith := floatToStr(ref.ArithmeticLOS)
 		return []string{ref.Code, ref.Description, floatToStr(ref.Weight), geo, arith}
 	}
-	return []string{code, fallbackDesc, "0", "", ""}
+	return []string{code, "", "0", "", ""}
 }
 
 func (g *Grouper) drgFields(e *DRGEntry) (string, string, float64, *float64, *float64) {
@@ -531,56 +543,197 @@ func (g *Grouper) drgFields(e *DRGEntry) (string, string, float64, *float64, *fl
 }
 
 // ── MDC families ─────────────────────────────────────────────────────────────
+//
+// Each family function returns [3]string{mcc_drg, cc_drg, none_drg}.
+// For 2-tier DRGs (CMM / SENZA CMM) repeat the lower DRG for CC and NONE.
+// For 2-tier DRGs (CC/CMM / SENZA CC/CMM) repeat the upper DRG for MCC and CC.
+// For a single DRG (no CC split) repeat the same code in all three slots.
 
-func respiratoryFamily(dx string) [4]string {
+// nervousFamily covers MDC 01 – Malattie e disturbi del sistema nervoso (medici).
+func nervousFamily(dx string) [3]string {
+	switch {
+	case hasAnyPrefix(dx, "I60", "I61", "I62", "I63"):
+		// Emorragia intracranica / infarto cerebrale – 3 livelli CC
+		return [3]string{"064", "065", "066"}
+	case hasAnyPrefix(dx, "I65", "I66"):
+		// Occlusione precrebrale senza infarto – 2 livelli (CMM / SENZA CMM)
+		return [3]string{"067", "068", "068"}
+	case strings.HasPrefix(dx, "G45"):
+		// Ischemia transitoria – DRG unico
+		return [3]string{"069", "069", "069"}
+	case hasAnyPrefix(dx, "I67", "I68", "I69"):
+		// Altri disturbi cerebrovascolari – 3 livelli CC
+		return [3]string{"070", "071", "072"}
+	case hasAnyPrefix(dx, "G50", "G51", "G52", "G53", "G54", "G55", "G56", "G57", "G58", "G59",
+		"G60", "G61", "G62", "G63", "G64", "G65"):
+		// Nervi cranici e periferici – 2 livelli (CMM / SENZA CMM)
+		return [3]string{"073", "074", "074"}
+	case hasAnyPrefix(dx, "A87", "B00", "B01", "B02"):
+		// Meningite virale – 2 livelli (CON CC/CMM / SENZA CC/CMM)
+		return [3]string{"075", "075", "076"}
+	case hasAnyPrefix(dx, "R40", "R41"):
+		// Stupore e coma non traumatico – 2 livelli (CMM / SENZA CMM)
+		return [3]string{"080", "081", "081"}
+	case hasAnyPrefix(dx, "G40", "G41", "R56"):
+		// Convulsioni / epilessia – 2 livelli (CMM / SENZA CMM)
+		return [3]string{"100", "101", "101"}
+	case hasAnyPrefix(dx, "G43", "G44", "R51"):
+		// Cefalee – 2 livelli (CMM / SENZA CMM)
+		return [3]string{"102", "103", "103"}
+	default:
+		// Altri disturbi del sistema nervoso – 3 livelli CC
+		return [3]string{"091", "092", "093"}
+	}
+}
+
+// respiratoryFamily covers MDC 04 – Sistema respiratorio (medici).
+func respiratoryFamily(dx string) [3]string {
 	switch {
 	case hasAnyPrefix(dx, "J40", "J41", "J42", "J43", "J44", "J47"):
-		return [4]string{"190", "191", "192", "BRONCOPNEUMOPATIA CRONICA OSTRUTTIVA"}
+		return [3]string{"190", "191", "192"}
 	case hasAnyPrefix(dx, "J45", "J20", "J21"):
-		return [4]string{"202", "202", "203", "BRONCHITE E ASMA"}
+		// Bronchite e asma – 2 livelli (CON CC/CMM / SENZA CC/CMM)
+		return [3]string{"202", "202", "203"}
 	case hasAnyPrefix(dx, "J12", "J13", "J14", "J15", "J16", "J17", "J18"):
-		return [4]string{"193", "194", "195", "POLMONITE SEMPLICE E PLEURITE"}
+		return [3]string{"193", "194", "195"}
 	case strings.HasPrefix(dx, "I26"):
-		return [4]string{"175", "176", "176", "EMBOLIA POLMONARE"}
+		// Embolia polmonare – 2 livelli (CMM / SENZA CMM)
+		return [3]string{"175", "176", "176"}
 	case strings.HasPrefix(dx, "J96"):
-		return [4]string{"189", "189", "189", "EDEMA POLMONARE E INSUFFICIENZA RESPIRATORIA"}
+		// Insufficienza respiratoria – DRG unico
+		return [3]string{"189", "189", "189"}
 	case hasAnyPrefix(dx, "J90", "J91"):
-		return [4]string{"186", "187", "188", "VERSAMENTO PLEURICO"}
+		return [3]string{"186", "187", "188"}
 	case strings.HasPrefix(dx, "J93"):
-		return [4]string{"199", "200", "201", "PNEUMOTORACE"}
+		return [3]string{"199", "200", "201"}
 	case strings.HasPrefix(dx, "J84"):
-		return [4]string{"196", "197", "198", "MALATTIA POLMONARE INTERSTIZIALE"}
+		return [3]string{"196", "197", "198"}
 	case hasAnyPrefix(dx, "C33", "C34", "C38", "C39", "D02", "D14", "D38"):
-		return [4]string{"180", "181", "182", "NEOPLASIE DELL'APPARATO RESPIRATORIO"}
+		return [3]string{"180", "181", "182"}
 	case hasAnyPrefix(dx, "S22", "S27"):
-		return [4]string{"183", "184", "185", "TRAUMA TORACICO MAGGIORE"}
+		return [3]string{"183", "184", "185"}
 	}
-	return [4]string{}
+	return [3]string{}
 }
 
-func circulatoryFamily(dx string) [4]string {
+// circulatoryFamily covers MDC 05 – Sistema circolatorio (medici).
+func circulatoryFamily(dx string) [3]string {
 	switch {
 	case hasAnyPrefix(dx, "I21", "I22"):
-		return [4]string{"280", "281", "282", "INFARTO MIOCARDICO ACUTO"}
+		return [3]string{"280", "281", "282"}
 	case strings.HasPrefix(dx, "I50"):
-		return [4]string{"291", "292", "293", "SCOMPENSO CARDIACO E SHOCK"}
+		return [3]string{"291", "292", "293"}
 	case hasAnyPrefix(dx, "I47", "I48", "I49"):
-		return [4]string{"308", "309", "310", "ARITMIA CARDIACA E DISTURBI DELLA CONDUZIONE"}
+		return [3]string{"308", "309", "310"}
 	case strings.HasPrefix(dx, "R07"):
-		return [4]string{"311", "312", "313", "ANGINA PECTORIS"}
+		// Dolore toracico – DRG unico 313
+		return [3]string{"313", "313", "313"}
 	case strings.HasPrefix(dx, "R55"):
-		return [4]string{"312", "312", "313", "SINCOPE E COLLASSO"}
+		// Sincope e collasso – DRG unico 312
+		return [3]string{"312", "312", "312"}
 	case hasAnyPrefix(dx, "I10", "I11", "I12", "I13", "I15", "I16"):
-		return [4]string{"304", "305", "305", "IPERTENSIONE"}
+		// Ipertensione – 2 livelli (CMM / SENZA CMM)
+		return [3]string{"304", "305", "305"}
 	case strings.HasPrefix(dx, "I25"):
-		return [4]string{"302", "303", "303", "ATEROSCLEROSI"}
+		// Aterosclerosi – 2 livelli (CMM / SENZA CMM)
+		return [3]string{"302", "303", "303"}
 	case strings.HasPrefix(dx, "I71"):
-		return [4]string{"299", "300", "301", "DISTURBI VASCOLARI PERIFERICI"}
+		return [3]string{"299", "300", "301"}
 	}
-	return [4]string{}
+	return [3]string{}
 }
 
-func cardiacProcFamily(code string) [3]string {
+// giFamily covers MDC 06 – Sistema digerente (medici).
+func giFamily(dx string) [3]string {
+	switch {
+	case hasAnyPrefix(dx, "K20", "K21", "K22", "K23"):
+		// Disturbi esofagei maggiori – 3 livelli CC
+		return [3]string{"368", "369", "370"}
+	case hasAnyPrefix(dx, "C15", "C16", "C17", "C18", "C19", "C20", "C21",
+		"C22", "C23", "C24", "C25", "C26"):
+		// Neoplasia maligna digestiva – 3 livelli CC
+		return [3]string{"374", "375", "376"}
+	case hasAnyPrefix(dx, "K92"):
+		// Emorragia GI – 3 livelli CC
+		return [3]string{"377", "378", "379"}
+	case hasAnyPrefix(dx, "K25", "K26", "K27", "K28"):
+		// Ulcera peptica complicata – 3 livelli CC
+		return [3]string{"380", "381", "382"}
+	case hasAnyPrefix(dx, "K50", "K51"):
+		// Malattia infiammatoria intestinale – 3 livelli CC
+		return [3]string{"385", "386", "387"}
+	case strings.HasPrefix(dx, "K56"):
+		// Ostruzione GI – 3 livelli CC
+		return [3]string{"388", "389", "390"}
+	case hasAnyPrefix(dx, "K52", "K58", "K59"):
+		// Esofagite, gastroenterite e altri – 2 livelli (CMM / SENZA CMM)
+		return [3]string{"391", "392", "392"}
+	default:
+		// Altre diagnosi sistema digestivo – 3 livelli CC
+		return [3]string{"393", "394", "395"}
+	}
+}
+
+// hepatobiliaryFamily covers MDC 07 – Epatobiliare e pancreas (medici).
+func hepatobiliaryFamily(dx string) [3]string {
+	switch {
+	case hasAnyPrefix(dx, "K70", "K74"):
+		// Cirrosi ed epatite alcolica – 3 livelli CC
+		return [3]string{"432", "433", "434"}
+	case hasAnyPrefix(dx, "C22", "C23", "C24", "C25"):
+		// Neoplasia maligna epatobiliare – 3 livelli CC
+		return [3]string{"435", "436", "437"}
+	case hasAnyPrefix(dx, "K85", "K86"):
+		// Disturbi del pancreas – 3 livelli CC
+		return [3]string{"438", "439", "440"}
+	case hasAnyPrefix(dx, "K71", "K72", "K73", "K75", "K76"):
+		// Disturbi del fegato – 3 livelli CC
+		return [3]string{"441", "442", "443"}
+	case hasAnyPrefix(dx, "K80", "K81", "K82", "K83"):
+		// Vie biliari – 3 livelli CC
+		return [3]string{"444", "445", "446"}
+	}
+	return [3]string{}
+}
+
+// kidneyFamily covers MDC 11 – Rene e tratto urinario (medici).
+func kidneyFamily(dx string) [3]string {
+	switch {
+	case hasAnyPrefix(dx, "N17", "N18", "N19"):
+		// Insufficienza renale – 3 livelli CC
+		return [3]string{"682", "683", "684"}
+	case hasAnyPrefix(dx, "C64", "C65", "C66", "C67", "C68"):
+		// Neoplasie rene e tratto urinario – 3 livelli CC
+		return [3]string{"686", "687", "688"}
+	case hasAnyPrefix(dx, "N10", "N11", "N12", "N30"):
+		// Infezioni rene e tratto urinario – 2 livelli (CMM / SENZA CMM)
+		return [3]string{"689", "690", "690"}
+	case hasAnyPrefix(dx, "N20", "N21", "N22"):
+		// Calcoli urinari – 2 livelli (CMM / SENZA CMM)
+		return [3]string{"693", "694", "694"}
+	default:
+		// Altre diagnosi rene e tratto urinario – 3 livelli CC
+		return [3]string{"698", "699", "700"}
+	}
+}
+
+// infectiousFamily covers MDC 18 – Malattie infettive e parassitarie (medici).
+func infectiousFamily(dx string) [3]string {
+	switch {
+	case hasAnyPrefix(dx, "A40", "A41"):
+		// Setticemia/sepsi grave senza VM – 2 livelli (CMM / SENZA CMM)
+		return [3]string{"871", "872", "872"}
+	case hasAnyPrefix(dx, "B00", "B01", "B02", "B03", "B04", "B05", "B06",
+		"B07", "B08", "B09", "B10", "B19", "B25", "B26", "B27", "B34"):
+		// Malattia virale – 2 livelli (CMM / SENZA CMM)
+		return [3]string{"865", "866", "866"}
+	default:
+		// Altre malattie infettive – 3 livelli CC
+		return [3]string{"867", "868", "869"}
+	}
+}
+
+func cardiacProcFamily(code string) [2]string {
 	sec := code[0]
 	bsys := code[1]
 	rop := code[2]
@@ -589,47 +742,93 @@ func cardiacProcFamily(code string) [3]string {
 
 	if sec == '0' && bsys == '2' && rop == '7' && approach == '3' {
 		if device == 'D' || device == 'E' || device == 'T' {
-			return [3]string{"321", "322", "PROCEDURE CARDIOVASCOLARI PERCUTANEE CON DISPOSITIVO ENDOLUMINALE"}
+			return [2]string{"321", "322"}
 		}
-		return [3]string{"250", "251", "PROCEDURE CARDIOVASCOLARI PERCUTANEE SENZA DISPOSITIVO ENDOLUMINALE"}
+		return [2]string{"250", "251"}
 	}
 	if sec == '0' && bsys == '2' && rop == '1' {
-		return [3]string{"235", "236", "BYPASS CORONARICO SENZA CATETERISMO CARDIACO"}
+		return [2]string{"235", "236"}
 	}
 	if sec == '0' && bsys == '2' && rop == 'R' {
 		bpart := code[3]
 		if bpart == 'F' || bpart == 'G' || bpart == 'H' || bpart == 'J' {
-			return [3]string{"216", "220", "PROCEDURE SU VALVOLE CARDIACHE"}
+			return [2]string{"216", "220"}
 		}
 	}
-	return [3]string{}
+	return [2]string{}
 }
 
 // ── severity fallback ─────────────────────────────────────────────────────────
 
+// bestSeverityMatch selects the most appropriate DRG from a list of candidates
+// based on the complication level.  The Italian DRG descriptions use:
+//   - "CON CMM"     = with MCC (Major Complication/Comorbidity)
+//   - "CON CC"      = with CC  (Complication/Comorbidity)
+//   - "CON CC/CMM"  = with CC or MCC (combined 2-tier tier)
+//   - "SENZA CC/CMM" = without CC or MCC
+//   - "SENZA CMM"   = without MCC  (used in some 2-tier families)
 func bestSeverityMatch(candidates []DRGEntry, comp string) *DRGEntry {
-	var keywords []string
-	switch comp {
-	case "MCC":
-		keywords = []string{"WITH MCC", "W MCC"}
-	case "CC":
-		keywords = []string{"WITH CC", "W CC", "WITHOUT MCC"}
-	default:
-		keywords = []string{"WITHOUT CC/MCC", "W/O CC/MCC", "WITHOUT CC"}
+	upper := make([]string, len(candidates))
+	for i, c := range candidates {
+		upper[i] = strings.ToUpper(c.Description)
 	}
 
-	for i := range candidates {
-		desc := strings.ToUpper(candidates[i].Description)
-		for _, kw := range keywords {
-			if strings.Contains(desc, kw) {
-				// avoid "WITH CC" matching "WITH MCC"
-				if comp == "CC" && strings.Contains(desc, "WITH MCC") {
-					continue
-				}
+	switch comp {
+	case "MCC":
+		// First pass: dedicated MCC/CMM tier.
+		for i, desc := range upper {
+			if strings.Contains(desc, "CON CMM") || strings.Contains(desc, "WITH MCC") {
+				return &candidates[i]
+			}
+		}
+		// Second pass: combined CC/CMM tier (2-tier DRGs).
+		for i, desc := range upper {
+			if strings.Contains(desc, "CON CC/CMM") || strings.Contains(desc, "WITH CC/MCC") {
+				return &candidates[i]
+			}
+		}
+
+	case "CC":
+		// First pass: dedicated CC tier (not combined with CMM).
+		for i, desc := range upper {
+			hasCombined := strings.Contains(desc, "CON CC/CMM") || strings.Contains(desc, "WITH CC/MCC")
+			hasMCC := strings.Contains(desc, "CON CMM") || strings.Contains(desc, "WITH MCC")
+			hasCC := strings.Contains(desc, "CON CC") || strings.Contains(desc, "WITH CC")
+			if hasCC && !hasCombined && !hasMCC {
+				return &candidates[i]
+			}
+		}
+		// Second pass: combined CC/CMM tier (2-tier DRGs).
+		for i, desc := range upper {
+			if strings.Contains(desc, "CON CC/CMM") || strings.Contains(desc, "WITH CC/MCC") {
+				return &candidates[i]
+			}
+		}
+		// Third pass: without-MCC tier (CMM/SENZA CMM families: CC maps here).
+		for i, desc := range upper {
+			hasSenzaCCCMM := strings.Contains(desc, "SENZA CC/CMM") || strings.Contains(desc, "WITHOUT CC/MCC")
+			if (strings.Contains(desc, "SENZA CMM") || strings.Contains(desc, "WITHOUT MCC")) && !hasSenzaCCCMM {
+				return &candidates[i]
+			}
+		}
+
+	default: // NONE
+		// First pass: without CC/CMM tier.
+		for i, desc := range upper {
+			if strings.Contains(desc, "SENZA CC/CMM") || strings.Contains(desc, "WITHOUT CC/MCC") ||
+				strings.Contains(desc, "W/O CC/MCC") {
+				return &candidates[i]
+			}
+		}
+		// Second pass: without CMM (2-tier CMM/SENZA CMM families).
+		for i, desc := range upper {
+			hasSenzaCCCMM := strings.Contains(desc, "SENZA CC/CMM") || strings.Contains(desc, "WITHOUT CC/MCC")
+			if (strings.Contains(desc, "SENZA CMM") || strings.Contains(desc, "WITHOUT MCC")) && !hasSenzaCCCMM {
 				return &candidates[i]
 			}
 		}
 	}
+
 	if len(candidates) > 0 {
 		return &candidates[0]
 	}

@@ -240,73 +240,16 @@ func childrenOf(list []ICDEntry, prefix string) []ICDEntry {
 	return results
 }
 
-// drgPrefixMap maps each DRG code to the ICD-10-CM/IM code prefixes whose
-// principal diagnoses would group into that DRG family.
-// Only MDC 04 (respiratory) and MDC 05 (circulatory) are fully specified;
-// other DRGs fall back to the category-level codes for their MDC.
-var drgPrefixMap = map[string][]string{
-	// MDC 04 — respiratory system
-	"175": {"I26"}, "176": {"I26"},
-	"180": {"C33", "C34", "C38", "C39", "D02", "D14", "D38"},
-	"181": {"C33", "C34", "C38", "C39", "D02", "D14", "D38"},
-	"182": {"C33", "C34", "C38", "C39", "D02", "D14", "D38"},
-	"183": {"S22", "S27"}, "184": {"S22", "S27"}, "185": {"S22", "S27"},
-	"186": {"J90", "J91"}, "187": {"J90", "J91"}, "188": {"J90", "J91"},
-	"189": {"J96"},
-	"190": {"J40", "J41", "J42", "J43", "J44", "J47"},
-	"191": {"J40", "J41", "J42", "J43", "J44", "J47"},
-	"192": {"J40", "J41", "J42", "J43", "J44", "J47"},
-	"193": {"J12", "J13", "J14", "J15", "J16", "J17", "J18"},
-	"194": {"J12", "J13", "J14", "J15", "J16", "J17", "J18"},
-	"195": {"J12", "J13", "J14", "J15", "J16", "J17", "J18"},
-	"196": {"J84"}, "197": {"J84"}, "198": {"J84"},
-	"199": {"J93"}, "200": {"J93"}, "201": {"J93"},
-	"202": {"J20", "J21", "J45"}, "203": {"J20", "J21", "J45"},
-	// MDC 05 — circulatory system
-	"280": {"I21", "I22"}, "281": {"I21", "I22"}, "282": {"I21", "I22"},
-	"291": {"I50"}, "292": {"I50"}, "293": {"I50"},
-	"299": {"I71"}, "300": {"I71"}, "301": {"I71"},
-	"302": {"I25"}, "303": {"I25"},
-	"304": {"I10", "I11", "I12", "I13", "I15", "I16"},
-	"305": {"I10", "I11", "I12", "I13", "I15", "I16"},
-	"308": {"I47", "I48", "I49"}, "309": {"I47", "I48", "I49"}, "310": {"I47", "I48", "I49"},
-	"311": {"R07"}, "312": {"R07", "R55"}, "313": {"R07"},
-}
-
-// ICD10ForDRG returns ICD-10-IM entries associated with the given (already-
-// normalised) DRG code.  For DRGs in drgPrefixMap it returns the specific
-// category-level codes (up to cat 4, i.e. codes ≤ 5 chars); for all other DRGs
-// it falls back to the 3-character categories for the DRG's MDC.
+// ICD10ForDRG returns ICD-10-IM entries associated with the given DRG code.
+// It looks up the DRG's MDC and returns all ICD-10 entries (up to cat-4 depth)
+// whose principal-diagnosis classification falls in that MDC.  This relies
+// entirely on the codes already loaded in the Store rather than any static map.
 func (s *Store) ICD10ForDRG(drgCode string) []ICDEntry {
-	if prefixes, ok := drgPrefixMap[drgCode]; ok {
-		return s.icd10ForPrefixes(prefixes)
-	}
 	drg, ok := s.drgByCode[drgCode]
 	if !ok {
 		return nil
 	}
 	return s.icd10ForMDC(drg.MDC)
-}
-
-// icd10ForPrefixes returns ICD-10 entries whose code starts with any of the
-// given prefixes, limited to codes of at most 5 characters (cat 3 + cat 4).
-func (s *Store) icd10ForPrefixes(prefixes []string) []ICDEntry {
-	if len(prefixes) == 0 {
-		return nil
-	}
-	var result []ICDEntry
-	for _, e := range s.icd10List {
-		if len(e.Code) > 5 {
-			continue // skip cat 5 sub-codes to keep the list concise
-		}
-		for _, pfx := range prefixes {
-			if strings.HasPrefix(e.Code, pfx) {
-				result = append(result, e)
-				break
-			}
-		}
-	}
-	return result
 }
 
 // icd10ForMDC returns the 3-character category codes (cat 3) for a given MDC.

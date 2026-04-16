@@ -649,7 +649,7 @@
     <button class="tab-btn" onclick="switchTab('search')">Ricerca Testuale</button>
     <button class="tab-btn" onclick="switchTab('infer')">Ricerca Similitudine</button>
     <button class="tab-btn" onclick="switchTab('cipi')">Codici CIPI</button>
-    <button class="tab-btn" onclick="switchTab('drg')">DRG MS</button>
+    <button class="tab-btn" onclick="switchTab('drg')">MS-DRG</button>
     <button class="tab-btn" onclick="switchTab('list')">Esplora Codici</button>
     <button class="tab-btn" onclick="switchTab('info')">Info</button>
   </div>
@@ -882,8 +882,8 @@
         <h2 style="margin:0">MS-DRG Grouper</h2>
         <div class="examples" style="margin:0">
           <span>Esempi:</span>
-          <span class="example-chip" onclick="setDRGGroup('I2109','J9601 E1165','02703DZ',67,'M','01')">AMI + Angioplastica</span>
-          <span class="example-chip" onclick="setDRGGroup('I5030','E1169 N184','',75,'F','01')">Heart Failure</span>
+          <span class="example-chip" onclick="setDRGGroup('I2109','J9601 E1165','02703DZ',67,'M','01')">IMA + Angioplastica</span>
+          <span class="example-chip" onclick="setDRGGroup('I5030','E1169 N184','',75,'F','01')">Scompenso cardiaco</span>
           <span class="example-chip" onclick="setDRGGroup('J1889','J9601','',82,'M','01')">Polmonite + IRA</span>
           <span class="example-chip" onclick="setDRGGroup('N186','','5A1D70Z',68,'M','01')">IRC + Dialisi</span>
           <span class="example-chip" onclick="setDRGGroup('A419','R6521 N179','',71,'M','02')">Sepsi + Shock settico</span>
@@ -1066,12 +1066,12 @@
       </div>
       <div class="examples">
         <span>Esempi:</span>
-        <span class="example-chip" onclick="setDRGLookup('001')">001 Heart Transplant</span>
-        <span class="example-chip" onclick="setDRGLookup('280')">280 AMI + MCC</span>
-        <span class="example-chip" onclick="setDRGLookup('291')">291 Heart Failure + MCC</span>
-        <span class="example-chip" onclick="setDRGLookup('470')">470 Hip/Knee Replacement</span>
-        <span class="example-chip" onclick="setDRGLookup('193')">193 Pneumonia + MCC</span>
-        <span class="example-chip" onclick="setDRGLookup('871')">871 Septicemia + MV &gt;96h</span>
+        <span class="example-chip" onclick="setDRGLookup('001')">001 Trapianto Cuore</span>
+        <span class="example-chip" onclick="setDRGLookup('280')">280 IMA + CMM</span>
+        <span class="example-chip" onclick="setDRGLookup('291')">291 Scompenso Cardiaco + CMM</span>
+        <span class="example-chip" onclick="setDRGLookup('470')">470 Protesi anca/ginocchio</span>
+        <span class="example-chip" onclick="setDRGLookup('193')">193 Polmonite + CMM</span>
+        <span class="example-chip" onclick="setDRGLookup('871')">871 Setticemia + VM &gt;96h</span>
       </div>
       <div id="result-drg-lookup"></div>
     </div>
@@ -1081,7 +1081,7 @@
       <div class="form-row">
         <div class="form-group">
           <label>Parole chiave</label>
-          <input type="text" id="drg-search-q" placeholder="es. heart failure, pneumonia, septicemia…" />
+          <input type="text" id="drg-search-q" placeholder="es. scompenso cardiaco, polmonite, setticemia…" />
         </div>
         <div class="form-group" style="max-width:240px">
           <label>MDC</label>
@@ -1099,12 +1099,12 @@
       </div>
       <div class="examples">
         <span>Esempi:</span>
-        <span class="example-chip" onclick="setDRGSearch('heart failure')">heart failure</span>
-        <span class="example-chip" onclick="setDRGSearch('pneumonia')">pneumonia</span>
-        <span class="example-chip" onclick="setDRGSearch('septicemia')">septicemia</span>
-        <span class="example-chip" onclick="setDRGSearch('kidney transplant')">kidney transplant</span>
-        <span class="example-chip" onclick="setDRGSearch('stroke')">stroke</span>
-        <span class="example-chip" onclick="setDRGSearch('respiratory failure')">respiratory failure</span>
+        <span class="example-chip" onclick="setDRGSearch('scompenso cardiaco')">scompenso cardiaco</span>
+        <span class="example-chip" onclick="setDRGSearch('polmonite')">polmonite</span>
+        <span class="example-chip" onclick="setDRGSearch('setticemia')">setticemia</span>
+        <span class="example-chip" onclick="setDRGSearch('trapianto rene')">trapianto rene</span>
+        <span class="example-chip" onclick="setDRGSearch('ictus')">ictus</span>
+        <span class="example-chip" onclick="setDRGSearch('insufficienza respiratoria')">insufficienza respiratoria</span>
       </div>
       <div id="result-drg-search"></div>
     </div>
@@ -1153,7 +1153,11 @@
           <strong>CC/CMM</strong>: le diagnosi secondarie vengono valutate come
           <em>Complicazione o Comorbidità</em> (CC) o <em>Complicazione o Comorbidità Maggiore</em> (CMM),
           influenzando la scelta tra i DRG triplet (CMM / CC / senza CC).<br>
-          <strong>DRG finale</strong>: intersecazione MDC × partizione × livello CC produce il codice DRG numerico.
+          <strong>DRG finale</strong>: intersecazione MDC × partizione × livello CC produce il codice DRG numerico.<br>
+          <strong>Famiglie MDC supportate</strong>: MDC 01 (sistema nervoso), MDC 04 (apparato respiratorio),
+          MDC 05 (sistema circolatorio), MDC 06 (apparato digerente), MDC 07 (epato-biliare e pancreas),
+          MDC 11 (rene e vie urinarie), MDC 18 (malattie infettive e parassitarie) — le descrizioni di
+          ogni DRG sono sempre lette dal database, senza etichette hardcoded.
         </div>
       </div>
 
