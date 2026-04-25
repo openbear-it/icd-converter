@@ -624,7 +624,7 @@
         <span class="header-icon">🏥</span>
         ICD Converter
       </h1>
-      <p>Classificazioni ICD-9-CM · ICD-10-IM v.GAMMA 2.1 · CIPI v.GAMMA 2.0 · MS-DRG CMS FY2026 v43.0 &mdash; Ministero della Salute italiano</p>
+      <p>Classificazioni ICD-9-CM · ICD-10-IM v.GAMMA 2.1 · CIPI v.GAMMA 2.0 · Transcodifica ICD-9↔CIPI v.2.0.1 · MS-DRG CMS FY2026 v43.0 &mdash; Ministero della Salute italiano</p>
     </div>
     <div class="header-badges">
       <span class="header-badge"><span class="dot" style="background:#93c5fd"></span>ICD-9-CM</span>
@@ -1359,6 +1359,56 @@
       </div>
     </div>
 
+    <!-- ── Conversione CIPI ↔ ICD-9 ─────────────────────────────────────── -->
+    <div class="card">
+      <h2>🔄 Conversione Bidirezionale ICD-9-CM ↔ CIPI</h2>
+      <p style="font-size:.87rem;color:#4a5568;margin-bottom:1.2rem;line-height:1.6">
+        A partire dalla <strong>tabella ufficiale di transcodifica v.2.0.1</strong> (Ministero della Salute, marzo 2026),
+        il sistema supporta la conversione bidirezionale tra codici procedurali <strong>ICD-9-CM</strong> e codici
+        <strong>CIPI</strong> (Classificazione degli Interventi e delle Procedure Italiani). Le 10.788 coppie
+        di mappatura coprono l'intero Volume 3 dell'ICD-9-CM e consentono di passare agevolmente tra le
+        due nomenclature nell'ambito del flusso informativo SDO.
+      </p>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.8rem;margin-bottom:1.2rem">
+        <div class="icd-card" style="background:#fdf4ff;border-color:#e9d5ff;text-align:center">
+          <div style="font-size:1.5rem;font-weight:900;color:#7e22ce">10.788</div>
+          <div style="font-size:.78rem;color:#6b21a8;font-weight:600">Mappature ICD-9 ↔ CIPI</div>
+          <div style="font-size:.72rem;color:#718096;margin-top:.2rem">Tabella v.2.0.1 — Marzo 2026</div>
+        </div>
+        <div class="icd-card" style="background:#f0f9ff;border-color:#bae6fd;text-align:center">
+          <div style="font-size:1.5rem;font-weight:900;color:#0369a1">2</div>
+          <div style="font-size:.78rem;color:#0369a1;font-weight:600">Endpoint REST</div>
+          <div style="font-size:.72rem;color:#718096;margin-top:.2rem">to-cipi · to-icd9</div>
+        </div>
+        <div class="icd-card" style="background:#f0fdf4;border-color:#bbf7d0;text-align:center">
+          <div style="font-size:1.5rem;font-weight:900;color:#166534">↔</div>
+          <div style="font-size:.78rem;color:#166534;font-weight:600">Bidirezionale</div>
+          <div style="font-size:.72rem;color:#718096;margin-top:.2rem">ICD-9 → CIPI e CIPI → ICD-9</div>
+        </div>
+      </div>
+
+      <h3 style="font-size:.9rem;font-weight:700;color:#1a56db;margin:.8rem 0 .5rem;padding-bottom:.3rem;border-bottom:2px solid #ebf4ff">Endpoint</h3>
+      <div class="icd-card" style="background:#fafafa">
+        <div style="font-family:monospace;font-size:.84rem;line-height:2">
+          <span style="background:#d1fae5;color:#065f46;border-radius:4px;padding:.1rem .4rem;margin-right:.5rem;font-weight:700">GET</span>
+          <code>/api/v1/icd9/<strong>{code}</strong>/to-cipi</code>
+          <span style="color:#718096;margin-left:.8rem;font-family:sans-serif;font-size:.8rem">→ converte un codice ICD-9-CM nei CIPI equivalenti</span><br>
+          <span style="background:#d1fae5;color:#065f46;border-radius:4px;padding:.1rem .4rem;margin-right:.5rem;font-weight:700">GET</span>
+          <code>/api/v1/cipi/<strong>{code}</strong>/to-icd9</code>
+          <span style="color:#718096;margin-left:.8rem;font-family:sans-serif;font-size:.8rem">→ converte un codice CIPI nei codici ICD-9-CM equivalenti</span>
+        </div>
+      </div>
+      <div class="icd-card" style="background:#fffbeb;border-color:#fcd34d;margin-top:.6rem">
+        <div class="desc" style="line-height:1.6">
+          I risultati della conversione includono il codice sorgente completo di descrizione e, nel campo
+          <code style="background:#fef3c7;padding:.1rem .35rem;border-radius:3px;font-size:.8rem">mappings</code>,
+          la lista dei codici destinazione arricchiti di descrizione, tipo e gerarchia.
+          Un codice ICD-9 può corrispondere a più CIPI (relazione 1-N) e viceversa.
+        </div>
+      </div>
+    </div>
+
     <!-- ── Fonti dei dati ────────────────────────────────────────────────── -->
     <div class="card">
       <h2>📚 Fonti dei Dati</h2>
@@ -1422,7 +1472,7 @@
 
       <!-- CIPI -->
       <h3 style="font-size:.9rem;font-weight:700;color:#1a56db;margin:.8rem 0 .5rem;padding-bottom:.3rem;border-bottom:2px solid #ebf4ff">
-        CIPI — Classificazione degli Interventi e delle Procedure Italiani v.GAMMA 2.0
+        CIPI — Classificazione degli Interventi e delle Procedure Italiani v.GAMMA 2.0 &amp; Transcodifica ICD-9↔CIPI v.2.0.1
       </h3>
       <div class="icd-card">
         <div class="code">Tabella CIPI v.GAMMA 2.0 (2025)</div>
@@ -1437,12 +1487,14 @@
       </div>
       <div class="icd-card">
         <div class="code">Transcodifica ICD-9-CM ↔ CIPI v.2.0.1</div>
-        <div class="desc">Tabella ufficiale di transcodifica bidirezionale tra ICD-9-CM Volume 3 (procedure) e CIPI.</div>
+        <div class="desc">10.788 coppie di transcodifica bidirezionali tra ICD-9-CM Volume 3 (procedure) e codici CIPI. Abilita gli endpoint <code>/icd9/{code}/to-cipi</code> e <code>/cipi/{code}/to-icd9</code>.</div>
         <div class="desc" style="margin-top:.4rem">
           Fonte: <a href="https://www.salute.gov.it/new/sites/default/files/2026-03/TRANSCODIFICA-ICD9CM-CIPI-V.2.0.1-WEB.xlsx" target="_blank" style="color:#1a56db">TRANSCODIFICA-ICD9CM-CIPI-V.2.0.1-WEB.xlsx</a>
           — <a href="https://www.salute.gov.it/new/it/tema/assistenza-ospedaliera-sdo/documentazione-tecnica/" target="_blank" style="color:#1a56db">Ministero della Salute — Documentazione tecnica SDO</a>
         </div>
+        <span class="badge">10.788 mappature</span>
         <span class="badge">Marzo 2026</span>
+        <span class="badge">Bidirezionale</span>
       </div>
 
       <!-- Nota ufficiale -->

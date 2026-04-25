@@ -53,6 +53,7 @@ func RegisterRoutes(r *gin.Engine, h *Handler) {
 		// ICD-9 endpoints
 		v1.GET("/icd9/:code", h.GetICD9)
 		v1.GET("/icd9/:code/to-icd10", h.ICD9ToICD10)
+		v1.GET("/icd9/:code/to-cipi", h.ICD9ToCIPI)
 		v1.GET("/icd9/:code/expand", h.ExpandICD9)
 		v1.GET("/icd9", h.ListICD9)
 
@@ -64,6 +65,7 @@ func RegisterRoutes(r *gin.Engine, h *Handler) {
 
 		// CIPI endpoints
 		v1.GET("/cipi/:code", h.GetCIPI)
+		v1.GET("/cipi/:code/to-icd9", h.CIPIToICD9)
 		v1.GET("/cipi/:code/expand", h.ExpandCIPI)
 		v1.GET("/cipi", h.ListCIPI)
 
@@ -408,6 +410,42 @@ func (h *Handler) GetMDC(c *gin.Context) {
 type CIPIExpandResponse struct {
 	Parent   icd.CIPIEntry   `json:"parent"`
 	Children []icd.CIPIEntry `json:"children"`
+}
+
+// GetCIPI godoc
+// GET /api/v1/cipi/:code
+// ICD9ToCIPI godoc
+// GET /api/v1/icd9/:code/to-cipi
+// Converts an ICD-9-CM code to its CIPI equivalents.
+func (h *Handler) ICD9ToCIPI(c *gin.Context) {
+	code := c.Param("code")
+	src, ok := h.store.LookupICD9(code)
+	if !ok {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "ICD-9 code not found: " + code})
+		return
+	}
+	mappings, _ := h.store.ICD9ToCIPI(code)
+	if mappings == nil {
+		mappings = []icd.CIPIEntry{}
+	}
+	c.JSON(http.StatusOK, gin.H{"source": src, "mappings": mappings})
+}
+
+// CIPIToICD9 godoc
+// GET /api/v1/cipi/:code/to-icd9
+// Converts a CIPI code to its ICD-9-CM equivalents.
+func (h *Handler) CIPIToICD9(c *gin.Context) {
+	code := c.Param("code")
+	src, ok := h.store.LookupCIPI(code)
+	if !ok {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "CIPI code not found: " + code})
+		return
+	}
+	mappings, _ := h.store.CIPIToICD9(code)
+	if mappings == nil {
+		mappings = []icd.ICDEntry{}
+	}
+	c.JSON(http.StatusOK, gin.H{"source": src, "mappings": mappings})
 }
 
 // GetCIPI godoc

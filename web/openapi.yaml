@@ -1,9 +1,9 @@
 openapi: 3.0.3
 info:
   title: ICD Converter API
-  version: "1.4.0"
+  version: "1.5.0"
   description: >
-    API per la conversione e ricerca di codici ICD-9-CM ↔ ICD-10-IM e codici CIPI (nomenclatura italiana). Supporta lookup puntuale, conversione bidirezionale, espansione gerarchica, ricerca testuale full-text e ricerca per similarità semantica con pipeline avanzata: text enrichment dell'indice, query expansion LLM, multi-query splitting e fusione ibrida RRF (embedding + BM25). Include il grouper MS-DRG CMS FY2026 v43.0 con descrizioni in italiano.
+    API per la conversione e ricerca di codici ICD-9-CM ↔ ICD-10-IM ↔ CIPI (nomenclatura italiana). Supporta lookup puntuale, conversione bidirezionale (ICD-9↔ICD-10, ICD-9↔CIPI), espansione gerarchica, ricerca testuale full-text e ricerca per similarità semantica con pipeline avanzata: text enrichment dell'indice, query expansion LLM, multi-query splitting e fusione ibrida RRF (embedding + BM25). Include il grouper MS-DRG CMS FY2026 v43.0 con descrizioni in italiano.
 
 servers:
 - url: /api/v1
@@ -90,6 +90,42 @@ paths:
                   description: "Infarto miocardico acuto transmuratico di altra sede della parete anteriore"
                   category: "Malattie del sistema circolatorio"
                   mappings: [ "410.1" ]
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /icd9/{code}/to-cipi:
+    get:
+      tags: [ ICD-9-CM ]
+      summary: Converti ICD-9 → CIPI
+      description: Converte un codice ICD-9-CM nei relativi codici CIPI equivalenti (tabella ufficiale Ministero della Salute v.2.0.1, marzo 2026).
+      operationId: icd9ToCipi
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+          example: "00.01"
+        description: Codice ICD-9-CM da convertire in CIPI
+      responses:
+        "200":
+          description: Conversione effettuata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ICD9ToCIPIResponse"
+              example:
+                source:
+                  code: "00.01"
+                  description: "Terapia ad ultrasuoni dei vasi di testa e collo"
+                  category: "Procedure ed interventi"
+                  mappings: []
+                mappings:
+                - code: "39.99.20"
+                  description: "Terapia ad ultrasuoni dei vasi di testa e collo"
+                  type: "procedura"
+                  parent: "39.99"
+                  mappings: [ "00.01" ]
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -262,6 +298,43 @@ paths:
                 description: "Bypass aortocoronarico (CABG)"
                 type: "procedura"
                 parent: "H1"
+                mappings: [ "36.10", "36.11" ]
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /cipi/{code}/to-icd9:
+    get:
+      tags: [ CIPI ]
+      summary: Converti CIPI → ICD-9
+      description: Converte un codice CIPI nei relativi codici ICD-9-CM equivalenti (tabella ufficiale Ministero della Salute v.2.0.1, marzo 2026).
+      operationId: cipiToIcd9
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+          example: "39.99.20"
+        description: Codice CIPI da convertire in ICD-9-CM
+      responses:
+        "200":
+          description: Conversione effettuata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CIPIToICD9Response"
+              example:
+                source:
+                  code: "39.99.20"
+                  description: "Terapia ad ultrasuoni dei vasi di testa e collo"
+                  type: "procedura"
+                  parent: "39.99"
+                  mappings: [ "00.01" ]
+                mappings:
+                - code: "00.01"
+                  description: "Terapia ad ultrasuoni dei vasi di testa e collo"
+                  category: "Procedure ed interventi"
+                  mappings: []
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -719,7 +792,7 @@ components:
 
     CIPIEntry:
       type: object
-      description: Voce CIPI con codice, descrizione, tipo e gerarchia
+      description: Voce CIPI con codice, descrizione, tipo, gerarchia e mappings ICD-9
       properties:
         code:
           type: string
@@ -738,6 +811,36 @@ components:
           type: string
           description: Codice del nodo padre nella gerarchia CIPI
           example: "H1"
+        mappings:
+          type: array
+          description: Codici ICD-9-CM equivalenti (tabella transcodifica v.2.0.1)
+          items:
+            type: string
+          example: [ "36.10", "36.11" ]
+
+    ICD9ToCIPIResponse:
+      type: object
+      description: Risposta conversione ICD-9 → CIPI
+      properties:
+        source:
+          $ref: "#/components/schemas/ICDEntry"
+        mappings:
+          type: array
+          description: Codici CIPI equivalenti
+          items:
+            $ref: "#/components/schemas/CIPIEntry"
+
+    CIPIToICD9Response:
+      type: object
+      description: Risposta conversione CIPI → ICD-9
+      properties:
+        source:
+          $ref: "#/components/schemas/CIPIEntry"
+        mappings:
+          type: array
+          description: Codici ICD-9-CM equivalenti
+          items:
+            $ref: "#/components/schemas/ICDEntry"
 
     CIPISearchResult:
       allOf:

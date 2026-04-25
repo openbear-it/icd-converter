@@ -1,8 +1,8 @@
 # ICD Converter
 
-Servizio REST in Go per la conversione tra codici **ICD-9-CM** e **ICD-10-IM**, la ricerca di codici **CIPI** (Classificazione degli Interventi e Procedure Italiani) e il raggruppamento clinico con il grouper **MS-DRG CMS FY2026 v43.0**, con ricerca testuale full-text e ricerca per **similarità semantica** (embedding vettoriale o fallback euristico).
+Servizio REST in Go per la conversione tra codici **ICD-9-CM** e **ICD-10-IM**, la ricerca e la conversione di codici **CIPI** (Classificazione degli Interventi e Procedure Italiani) e il raggruppamento clinico con il grouper **MS-DRG CMS FY2026 v43.0**, con ricerca testuale full-text e ricerca per **similarità semantica** (embedding vettoriale o fallback euristico).
 
-I dati provengono dalle fonti ufficiali del **Ministero della Salute italiano**: 16.212 diagnosi ICD-9-CM, 4.460 procedure ICD-9-CM, 14.773 codici ICD-10-IM, 18.189 mappature di transcodifica, 259 codici CIPI (versione GAMMA 2.1, valida dal 16/02/2026), 772 codici DRG e 26 MDC (CMS FY2026 v43.0 con descrizioni in italiano), tutti incorporati nel binario via `go:embed`.
+I dati provengono dalle fonti ufficiali del **Ministero della Salute italiano**: 16.212 diagnosi ICD-9-CM, 4.460 procedure ICD-9-CM, 14.773 codici ICD-10-IM, 18.189 mappature ICD-9↔ICD-10, 259 codici CIPI (versione GAMMA 2.1, valida dal 16/02/2026), **10.788 mappature ICD-9↔CIPI** (tabella ufficiale v.2.0.1, marzo 2026), 772 codici DRG e 26 MDC (CMS FY2026 v43.0 con descrizioni in italiano), tutti incorporati nel binario via `go:embed`.
 
 ## Funzionalità
 
@@ -10,6 +10,7 @@ I dati provengono dalle fonti ufficiali del **Ministero della Salute italiano**:
 |---|---|
 | Conversione ICD-9 → ICD-10 | Dato un codice ICD-9 restituisce i codici ICD-10 equivalenti |
 | Conversione ICD-10 → ICD-9 | Dato un codice ICD-10 restituisce i codici ICD-9 equivalenti |
+| Conversione ICD-9 ↔ CIPI | Conversione bidirezionale tra ICD-9-CM e CIPI (tabella ufficiale v.2.0.1, 10.788 mappature) |
 | Espansione gerarchica | Dato un codice padre restituisce tutti i sottocodici (ICD-9, ICD-10, CIPI) |
 | Ricerca testuale | Cerca codici per parola chiave in ICD-9, ICD-10 e/o CIPI (ranking BM25) |
 | Ricerca semantica | Similarità vettoriale (embedding) con **text enrichment**, **query expansion LLM** e **fusione ibrida RRF** (embedding + BM25); fallback euristico quando l'embedding non è configurato |
@@ -32,16 +33,17 @@ icd-converter/
 │       ├── icd10im_codes.csv
 │       ├── icd10im_mappings.csv
 │       ├── cipi_codes.csv       # Codici CIPI (Classificazione degli Interventi e Procedure Italiani)
+│       ├── cipi_mappings.csv    # 10.788 mappature bidirezionali ICD-9-CM ↔ CIPI (v.2.0.1, marzo 2026)
 │       ├── drg_codes.csv        # 772 codici MS-DRG CMS FY2026 v43.0 con descrizioni in italiano
 │       └── mdc_codes.csv        # 26 Major Diagnostic Categories con descrizioni in italiano
 ├── internal/
 │   ├── db/
-│   │   ├── db.go                # Apertura SQLite e schema migration (include tabella cipi_codes)
-│   │   ├── seed.go              # Seeder idempotente da CSV embedded (include import CIPI)
-│   │   └── loader.go            # Carica icd.Store dal DB (include LoadCIPI)
+│   │   ├── db.go                # Apertura SQLite e schema migration (include tabella cipi_codes, cipi_mappings)
+│   │   ├── seed.go              # Seeder idempotente da CSV embedded (include import CIPI e mappature)
+│   │   └── loader.go            # Carica icd.Store dal DB (include LoadCIPI con mappature)
 │   ├── icd/
-│   │   ├── data.go              # Strutture ICDEntry, CIPIEntry, DRGEntry, GroupResult e SearchResult
-│   │   ├── store.go             # Lookup, conversione, ricerca BM25 (ICD-9, ICD-10, CIPI, DRG)
+│   │   ├── data.go              # Strutture ICDEntry, CIPIEntry (con Mappings), DRGEntry, GroupResult e SearchResult
+│   │   ├── store.go             # Lookup, conversione, ricerca BM25 (ICD-9, ICD-10, CIPI, DRG); ICD9ToCIPI / CIPIToICD9
 │   │   └── grouper.go           # MS-DRG grouper CMS FY2026 v43.0 (Pre-MDC → MDC → SURG/MED → CC/MCC → DRG)
 │   ├── embed/
 │   │   └── embed.go             # Builder embedding, Index cosine-similarity, multi-query fusion, cache SQLite
@@ -127,8 +129,10 @@ GET /api/v1/icd10/{code}/expand       → codice padre + tutti i sottocodici
 
 ```
 GET /api/v1/cipi/{code}               → lookup codice CIPI
+GET /api/v1/cipi/{code}/to-icd9      → converte CIPI → ICD-9-CM (tabella v.2.0.1)
 GET /api/v1/cipi/{code}/expand        → codice padre + figli diretti
 GET /api/v1/cipi?page=1&limit=20&type=procedura   → lista paginata (type: diagnosi | procedura)
+GET /api/v1/icd9/{code}/to-cipi      → converte ICD-9-CM → CIPI (tabella v.2.0.1)
 ```
 
 ### MS-DRG CMS FY2026 v43.0

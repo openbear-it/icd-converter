@@ -10,10 +10,11 @@ type ICDEntry struct {
 
 // CIPIEntry represents a single CIPI code entry.
 type CIPIEntry struct {
-	Code        string `json:"code"`
-	Description string `json:"description"`
-	Type        string `json:"type"`   // "diagnosi" | "procedura"
-	Parent      string `json:"parent"` // parent code in the hierarchy
+	Code        string   `json:"code"`
+	Description string   `json:"description"`
+	Type        string   `json:"type"`     // "diagnosi" | "procedura"
+	Parent      string   `json:"parent"`   // parent code in the hierarchy
+	Mappings    []string `json:"mappings"` // corresponding ICD-9-CM codes
 }
 
 // DRGEntry represents a single CMS MS-DRG entry (FY2026 v43.0).

@@ -17,10 +17,11 @@ type Store struct {
 	drgList     []DRGEntry
 	mdcByCode   map[string]MDCEntry
 	mdcList     []MDCEntry
+	icd9toCipi  map[string][]string // icd9_code → []cipi_code
 }
 
 // NewStore builds a Store from pre-loaded slices (e.g. loaded from SQLite).
-func NewStore(icd9 []ICDEntry, icd10 []ICDEntry, cipi []CIPIEntry, drg []DRGEntry, mdc []MDCEntry) *Store {
+func NewStore(icd9 []ICDEntry, icd10 []ICDEntry, cipi []CIPIEntry, drg []DRGEntry, mdc []MDCEntry, icd9toCipi map[string][]string) *Store {
 	s := &Store{
 		icd9ByCode:  make(map[string]ICDEntry, len(icd9)),
 		icd10ByCode: make(map[string]ICDEntry, len(icd10)),
@@ -32,6 +33,7 @@ func NewStore(icd9 []ICDEntry, icd10 []ICDEntry, cipi []CIPIEntry, drg []DRGEntr
 		drgList:     drg,
 		mdcByCode:   make(map[string]MDCEntry, len(mdc)),
 		mdcList:     mdc,
+		icd9toCipi:  icd9toCipi,
 	}
 	for _, e := range icd9 {
 		s.icd9ByCode[e.Code] = e
@@ -182,6 +184,37 @@ func normalizeDRGCode(code string) string {
 func (s *Store) LookupCIPI(code string) (CIPIEntry, bool) {
 	e, ok := s.cipiByCode[strings.TrimSpace(code)]
 	return e, ok
+}
+
+// ICD9ToCIPI converts an ICD-9-CM code to the mapped CIPI entries.
+func (s *Store) ICD9ToCIPI(code string) ([]CIPIEntry, bool) {
+	_, ok := s.icd9ByCode[strings.TrimSpace(code)]
+	if !ok {
+		return nil, false
+	}
+	cipiCodes := s.icd9toCipi[strings.TrimSpace(code)]
+	results := make([]CIPIEntry, 0, len(cipiCodes))
+	for _, cc := range cipiCodes {
+		if e, found := s.cipiByCode[cc]; found {
+			results = append(results, e)
+		}
+	}
+	return results, true
+}
+
+// CIPIToICD9 converts a CIPI code to the mapped ICD-9-CM entries.
+func (s *Store) CIPIToICD9(code string) ([]ICDEntry, bool) {
+	src, ok := s.cipiByCode[strings.TrimSpace(code)]
+	if !ok {
+		return nil, false
+	}
+	results := make([]ICDEntry, 0, len(src.Mappings))
+	for _, m := range src.Mappings {
+		if e, found := s.icd9ByCode[m]; found {
+			results = append(results, e)
+		}
+	}
+	return results, true
 }
 
 // ChildrenCIPI returns all CIPI entries whose parent equals the given code.

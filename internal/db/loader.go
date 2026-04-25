@@ -60,8 +60,28 @@ func LoadStore(sqldb *sql.DB) (*icd.Store, error) {
 		return nil, err
 	}
 
+	// ── Load CIPI mappings: icd9 → []cipi and cipi → []icd9 ──────────────
+	icd9toCipi := make(map[string][]string)
+	cipiToIcd9 := make(map[string][]string)
+
+	cipiMapRows, err := sqldb.Query(
+		`SELECT icd9_code, cipi_code FROM cipi_mappings WHERE version_id = ?`, versionID)
+	if err != nil {
+		return nil, fmt.Errorf("query cipi_mappings: %w", err)
+	}
+	defer cipiMapRows.Close()
+	for cipiMapRows.Next() {
+		var c9, cc string
+		if err := cipiMapRows.Scan(&c9, &cc); err != nil {
+			continue
+		}
+		icd9toCipi[c9] = append(icd9toCipi[c9], cc)
+		cipiToIcd9[cc] = append(cipiToIcd9[cc], c9)
+	}
+	cipiMapRows.Close()
+
 	// ── Load CIPI ──────────────────────────────────────────────────────────
-	cipiEntries, err := loadCIPI(sqldb, versionID)
+	cipiEntries, err := loadCIPI(sqldb, versionID, cipiToIcd9)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +96,7 @@ func LoadStore(sqldb *sql.DB) (*icd.Store, error) {
 		return nil, err
 	}
 
-	return icd.NewStore(icd9entries, icd10entries, cipiEntries, drgEntries, mdcEntries), nil
+	return icd.NewStore(icd9entries, icd10entries, cipiEntries, drgEntries, mdcEntries, icd9toCipi), nil
 }
 
 func loadICD9(db *sql.DB, versionID int64, table string, icd9to10 map[string][]string) ([]icd.ICDEntry, error) {
@@ -229,7 +249,7 @@ func indexOf(s string, b byte) int {
 	return -1
 }
 
-func loadCIPI(db *sql.DB, versionID int64) ([]icd.CIPIEntry, error) {
+func loadCIPI(db *sql.DB, versionID int64, cipiToIcd9 map[string][]string) ([]icd.CIPIEntry, error) {
 	rows, err := db.Query(
 		`SELECT code, description, type, COALESCE(parent,'') FROM cipi_codes WHERE version_id = ? ORDER BY code`,
 		versionID)
@@ -244,11 +264,16 @@ func loadCIPI(db *sql.DB, versionID int64) ([]icd.CIPIEntry, error) {
 		if err := rows.Scan(&code, &desc, &typ, &parent); err != nil {
 			continue
 		}
+		mappings := cipiToIcd9[code]
+		if mappings == nil {
+			mappings = []string{}
+		}
 		entries = append(entries, icd.CIPIEntry{
 			Code:        code,
 			Description: desc,
 			Type:        typ,
 			Parent:      parent,
+			Mappings:    mappings,
 		})
 	}
 	return entries, rows.Err()

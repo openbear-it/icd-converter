@@ -65,6 +65,14 @@ CREATE TABLE IF NOT EXISTS cipi_codes (
     UNIQUE(version_id, code)
 );
 
+CREATE TABLE IF NOT EXISTS cipi_mappings (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    version_id  INTEGER NOT NULL REFERENCES icd_versions(id),
+    icd9_code   TEXT    NOT NULL,
+    cipi_code   TEXT    NOT NULL,
+    UNIQUE(version_id, icd9_code, cipi_code)
+);
+
 CREATE TABLE IF NOT EXISTS icd_embeddings (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     version_id INTEGER NOT NULL,
@@ -97,6 +105,8 @@ CREATE INDEX IF NOT EXISTS idx_icd10_code  ON icd10_codes(code);
 CREATE INDEX IF NOT EXISTS idx_cipi_code   ON cipi_codes(code);
 CREATE INDEX IF NOT EXISTS idx_map_icd9    ON icd_mappings(icd9_code);
 CREATE INDEX IF NOT EXISTS idx_map_icd10   ON icd_mappings(icd10_code);
+CREATE INDEX IF NOT EXISTS idx_cipi_map_icd9  ON cipi_mappings(icd9_code);
+CREATE INDEX IF NOT EXISTS idx_cipi_map_cipi  ON cipi_mappings(cipi_code);
 CREATE INDEX IF NOT EXISTS idx_emb_lookup  ON icd_embeddings(version_id, icd_type, model);
 `
 

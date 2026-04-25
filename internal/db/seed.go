@@ -83,12 +83,18 @@ func Seed(db *sql.DB, opts SeedOptions) error {
 		return fmt.Errorf("cipi codes: %w", err)
 	}
 
+	// ── CIPI → ICD-9-CM mappings ───────────────────────────────────────────
+	ncipim, err := importCIPIMappings(tx, opts.DataFS, versionID)
+	if err != nil {
+		return fmt.Errorf("cipi mappings: %w", err)
+	}
+
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit: %w", err)
 	}
 
-	log.Printf("db: seeded in %s — ICD-9 diagnosi: %d, procedure: %d, ICD-10: %d, mappings: %d, CIPI: %d",
-		time.Since(start).Round(time.Millisecond), n9d, n9p, n10, nm, ncipi)
+	log.Printf("db: seeded in %s — ICD-9 diagnosi: %d, procedure: %d, ICD-10: %d, mappings ICD: %d, CIPI: %d, mappings CIPI: %d",
+		time.Since(start).Round(time.Millisecond), n9d, n9p, n10, nm, ncipi, ncipim)
 	return nil
 }
 
@@ -296,6 +302,52 @@ func importCIPI(tx *sql.Tx, fsys fs.FS, versionID int64) (int, error) {
 			b = 1
 		}
 		if _, err := prep.Exec(versionID, code, desc, typ, parent, b); err != nil {
+			continue
+		}
+		count++
+	}
+	return count, nil
+}
+
+// importCIPIMappings reads cipi_mappings.csv and inserts CIPI → ICD-9-CM mapping rows.
+// CSV columns: icd9_code, cipi_code
+func importCIPIMappings(tx *sql.Tx, fsys fs.FS, versionID int64) (int, error) {
+	f, err := fsys.Open("data/official/cipi_mappings.csv")
+	if err != nil {
+		return 0, fmt.Errorf("open cipi_mappings.csv: %w", err)
+	}
+	defer f.Close()
+
+	r := csv.NewReader(f)
+	r.FieldsPerRecord = -1
+	_, _ = r.Read() // skip header
+
+	prep, err := tx.Prepare(
+		`INSERT OR IGNORE INTO cipi_mappings(version_id, icd9_code, cipi_code) VALUES(?,?,?)`,
+	)
+	if err != nil {
+		return 0, err
+	}
+	defer prep.Close()
+
+	var count int
+	for {
+		rec, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			continue
+		}
+		if len(rec) < 2 {
+			continue
+		}
+		icd9Code := strings.TrimSpace(rec[0])
+		cipiCode := strings.TrimSpace(rec[1])
+		if icd9Code == "" || cipiCode == "" {
+			continue
+		}
+		if _, err := prep.Exec(versionID, icd9Code, cipiCode); err != nil {
 			continue
 		}
 		count++
